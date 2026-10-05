@@ -1,0 +1,34 @@
+# Classic Kilithattu Kali Rules Preset
+name: classic
+version: "1.0.0"
+
+# Field geometry
+num_lanes: 2
+num_rows: 5
+lane_width: 3.0
+row_depth: 3.0
+safe_zone_depth: 2.0
+
+# Team counts
+num_crossers: 4
+num_guards: 4
+
+# Physics and rules
+dt: 0.05
+innings_duration: 120.0
+r_tag: 0.6
+clap_time: 2.0
+
+# Speeds
+crosser_speed: 5.0
+guard_speed: 4.2
+kili_speed: 4.8
+
+# Plus toggles (all disabled in classic)
+p1_momentum_stamina: false
+p2_facing_turning: false
+p3_limited_vision: false
+p4_strategic_clap: false
+p5_procedural_fields: false
+p6_team_calls: false
+p7_human_fair: false
