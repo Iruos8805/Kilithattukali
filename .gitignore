@@ -42,6 +42,7 @@ htmlcov/
 # Local run outputs & checkpoints
 runs/
 data/
+checkpoints/
 *.kreplay
 *.log
 .rocm-libs/

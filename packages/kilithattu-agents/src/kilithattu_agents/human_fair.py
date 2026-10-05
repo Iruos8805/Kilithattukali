@@ -26,12 +26,12 @@ class HumanFairPolicyWrapper:
         self.decision_interval_ticks = decision_interval_ticks
         self.sticky_action_prob = sticky_action_prob
 
-    def init_carry(self, num_agents: int) -> dict[str, Any]:
+    def init_carry(self, num_agents: int = 16) -> dict[str, Any]:
         base_carry = self.base_policy.init_carry(num_agents)
         return {
             "base_carry": base_carry,
             "obs_buffer": [],  # Ring buffer of historical observations
-            "held_actions": [None] * num_agents,
+            "held_actions": {},  # Dict mapping agent_idx to held action
             "tick_counter": 0,
         }
 
@@ -50,7 +50,7 @@ class HumanFairPolicyWrapper:
 
         delayed_obs = buf[0]
         counter = carry["tick_counter"]
-        held = carry["held_actions"][agent_idx]
+        held = carry["held_actions"].get(agent_idx, None)
 
         k1, k2 = jax.random.split(key)
         # Check decision interval

@@ -36,3 +36,56 @@ def load_checkpoint_metadata(checkpoint_dir: str | Path) -> CheckpointMetadata:
     with open(meta_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return CheckpointMetadata(**data)
+
+
+def save_model_checkpoint(
+    checkpoint_dir: str | Path,
+    params: Any,
+    metadata: CheckpointMetadata,
+) -> Path:
+    """Save model weights and metadata to checkpoint directory."""
+    import pickle
+    import jax
+
+    out = Path(checkpoint_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    save_checkpoint_metadata(out, metadata)
+
+    weights_path = out / "model.pkl"
+    with open(weights_path, "wb") as f:
+        pickle.dump(jax.device_get(params), f)
+
+    try:
+        from flax import serialization
+        msgpack_path = out / "model.msgpack"
+        with open(msgpack_path, "wb") as f:
+            f.write(serialization.to_bytes(params))
+    except Exception:
+        pass
+
+    return out
+
+
+def load_model_checkpoint(
+    checkpoint_dir: str | Path,
+) -> tuple[Any, CheckpointMetadata]:
+    """Load model parameters and metadata from checkpoint directory."""
+    import pickle
+
+    out = Path(checkpoint_dir)
+    metadata = load_checkpoint_metadata(out)
+
+    weights_path = out / "model.pkl"
+    if weights_path.exists():
+        with open(weights_path, "rb") as f:
+            params = pickle.load(f)
+        return params, metadata
+
+    msgpack_path = out / "model.msgpack"
+    if msgpack_path.exists():
+        from flax import serialization
+        with open(msgpack_path, "rb") as f:
+            raw_bytes = f.read()
+        return raw_bytes, metadata
+
+    raise FileNotFoundError(f"No model weights found in {checkpoint_dir}")
