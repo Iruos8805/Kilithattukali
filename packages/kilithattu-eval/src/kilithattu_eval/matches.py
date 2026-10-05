@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
 from chex import PRNGKey
 from kilithattu_agents.policy import Policy
-from kilithattu_core.config import EnvParams
+from kilithattu_core.config import EnvParams, rules_hash
 from kilithattu_core.env import KilithattuEnv
 from kilithattu_game.controllers.scripted import ScriptedController
 from kilithattu_game.slots import SlotManager
@@ -27,6 +27,17 @@ class MatchResult(NamedTuple):
     team_b_points: int
     winner: str  # 'team_a', 'team_b', 'draw'
     innings: list[InningsResult]
+
+
+_JITTED_STEP_CACHE: dict[str, Any] = {}
+
+
+def _get_jitted_step(params: EnvParams) -> Any:
+    h = rules_hash(params)
+    if h not in _JITTED_STEP_CACHE:
+        env = KilithattuEnv(params)
+        _JITTED_STEP_CACHE[h] = jax.jit(lambda k, s, a: env.step(k, s, a, params))
+    return _JITTED_STEP_CACHE[h]
 
 
 def play_single_innings(
@@ -52,7 +63,7 @@ def play_single_innings(
     k_reset, key = jax.random.split(key)
     obs, state = env.reset(k_reset, params)
 
-    jitted_step = jax.jit(lambda k, s, a: env.step(k, s, a, params))
+    jitted_step = _get_jitted_step(params)
 
     ticks = 0
     for t in range(max_ticks):

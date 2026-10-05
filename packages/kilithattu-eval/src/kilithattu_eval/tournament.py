@@ -43,6 +43,11 @@ def run_tournament(
                 else:
                     tracker.record_match(name_a, name_b, 0.5)
 
+                print(
+                    f"  [{m + 1}/{matches_per_pair}] {name_a} vs {name_b} -> "
+                    f"Result: {res.winner.upper()} ({res.team_a_points} - {res.team_b_points})"
+                )
+
             score_diff = (a_wins - b_wins) / float(matches_per_pair)
             payoff_matrix[i, j] = score_diff
             payoff_matrix[j, i] = -score_diff

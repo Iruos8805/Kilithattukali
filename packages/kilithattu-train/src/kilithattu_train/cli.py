@@ -75,7 +75,9 @@ def train_stage(stage_id: str = "S0", num_updates: int = 5, rollout_len: int = 1
             f"Entropy: {float(metrics['entropy']):.3f}"
         )
 
-    print(f"Curriculum stage {stage_id} run finished. Cumulative points scored: {cumulative_points}")
+    print(
+        f"Curriculum stage {stage_id} run finished. Cumulative points scored: {cumulative_points}"
+    )
 
 
 def main() -> None:
@@ -85,7 +87,9 @@ def main() -> None:
     stage_parser = subparsers.add_parser("stage", help="Train on a curriculum stage")
     stage_parser.add_argument("--stage", default="S0", help="Stage ID (S0..S6)")
     stage_parser.add_argument("--updates", type=int, default=5, help="Number of training updates")
-    stage_parser.add_argument("--rollout-len", type=int, default=100, help="Rollout length in ticks")
+    stage_parser.add_argument(
+        "--rollout-len", type=int, default=100, help="Rollout length in ticks"
+    )
 
     args = parser.parse_args()
     if args.command == "stage" or args.command is None:
