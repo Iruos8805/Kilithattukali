@@ -1213,6 +1213,13 @@ requires-dist = [
 name = "kilithattu-workspace"
 version = "0.1.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "kilithattu-agents" },
+    { name = "kilithattu-core" },
+    { name = "kilithattu-eval" },
+    { name = "kilithattu-game" },
+    { name = "kilithattu-train" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1224,6 +1231,13 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "kilithattu-agents", editable = "packages/kilithattu-agents" },
+    { name = "kilithattu-core", editable = "packages/kilithattu-core" },
+    { name = "kilithattu-eval", editable = "packages/kilithattu-eval" },
+    { name = "kilithattu-game", editable = "packages/kilithattu-game" },
+    { name = "kilithattu-train", editable = "packages/kilithattu-train" },
+]
 
 [package.metadata.requires-dev]
 dev = [

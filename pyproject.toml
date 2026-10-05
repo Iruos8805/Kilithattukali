@@ -4,7 +4,13 @@ version = "0.1.0"
 description = "Kilithattu-RL: Multi-Agent RL and Playable Game for Kerala's Traditional Onam Game"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "kilithattu-core",
+    "kilithattu-agents",
+    "kilithattu-train",
+    "kilithattu-eval",
+    "kilithattu-game",
+]
 
 [dependency-groups]
 dev = [
