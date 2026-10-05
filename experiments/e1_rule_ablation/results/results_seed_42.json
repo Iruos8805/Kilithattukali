@@ -1,0 +1,44 @@
+{
+  "Classic": {
+    "variant": "Classic",
+    "mean_score": 15.0,
+    "all_out_rate": 1.0,
+    "delivery_rate": 0.0,
+    "num_innings": 1
+  },
+  "Classic+P1": {
+    "variant": "Classic+P1",
+    "mean_score": 9.0,
+    "all_out_rate": 1.0,
+    "delivery_rate": 0.0,
+    "num_innings": 1
+  },
+  "Classic+P2": {
+    "variant": "Classic+P2",
+    "mean_score": 15.0,
+    "all_out_rate": 1.0,
+    "delivery_rate": 0.0,
+    "num_innings": 1
+  },
+  "Classic+P3": {
+    "variant": "Classic+P3",
+    "mean_score": 15.0,
+    "all_out_rate": 1.0,
+    "delivery_rate": 0.0,
+    "num_innings": 1
+  },
+  "Classic+P4": {
+    "variant": "Classic+P4",
+    "mean_score": 0.0,
+    "all_out_rate": 1.0,
+    "delivery_rate": 0.0,
+    "num_innings": 1
+  },
+  "Plus": {
+    "variant": "Plus",
+    "mean_score": 0.0,
+    "all_out_rate": 1.0,
+    "delivery_rate": 0.0,
+    "num_innings": 1
+  }
+}

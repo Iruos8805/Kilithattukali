@@ -1,0 +1,27 @@
+version: 1.0.0
+levels:
+  beginner:
+    policy: scripted:crosser?aggression=0.3
+    observation_delay_ms: 300
+    decision_interval_ms: 150
+    sticky_action_prob: 0.15
+  easy:
+    policy: scripted:crosser?aggression=0.5
+    observation_delay_ms: 250
+    decision_interval_ms: 100
+    sticky_action_prob: 0.1
+  medium:
+    policy: scripted:crosser?aggression=0.7
+    observation_delay_ms: 200
+    decision_interval_ms: 100
+    sticky_action_prob: 0.05
+  hard:
+    policy: scripted:crosser?aggression=0.9
+    observation_delay_ms: 150
+    decision_interval_ms: 50
+    sticky_action_prob: 0.0
+  kalari_master:
+    policy: scripted:crosser?aggression=1.0
+    observation_delay_ms: 50
+    decision_interval_ms: 50
+    sticky_action_prob: 0.0
