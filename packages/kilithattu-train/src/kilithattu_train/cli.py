@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import atexit
+import os
 
 import jax
 import jax.numpy as jnp
@@ -12,6 +14,10 @@ from kilithattu_core.env import KilithattuEnv
 from kilithattu_train.curriculum import get_stage
 from kilithattu_train.mappo import compute_gae, ppo_loss
 from kilithattu_train.rollout import collect_rollout
+
+# Prevent double-free during ROCm runtime teardown on consumer RDNA3 GPUs
+if os.environ.get("HSA_OVERRIDE_GFX_VERSION"):
+    atexit.register(lambda: os._exit(0))
 
 
 def train_stage(stage_id: str = "S0", num_updates: int = 5, rollout_len: int = 100) -> None:

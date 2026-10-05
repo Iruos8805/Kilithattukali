@@ -44,6 +44,7 @@ runs/
 data/
 *.kreplay
 *.log
+.rocm-libs/
 
 # IDEs
 .idea/

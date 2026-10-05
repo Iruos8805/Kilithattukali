@@ -1,5 +1,7 @@
 """Benchmark environment simulation steps per second."""
 
+import atexit
+import os
 import time
 
 import jax
@@ -7,8 +9,12 @@ import jax.numpy as jnp
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import JointActions, KilithattuEnv
 
+if os.environ.get("HSA_OVERRIDE_GFX_VERSION"):
+    atexit.register(lambda: os._exit(0))
+
 
 def run_benchmark(num_envs: int = 64, num_steps: int = 500) -> float:
+    print(f"JAX Backend: {jax.default_backend()} | Devices: {jax.devices()}")
     params = EnvParams()
     env = KilithattuEnv(params)
 
