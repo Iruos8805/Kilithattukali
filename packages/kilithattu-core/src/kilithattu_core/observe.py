@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import NamedTuple
+
 import jax
 import jax.numpy as jnp
 from chex import Array
@@ -14,12 +15,14 @@ from kilithattu_core.spaces import (
     MAX_CROSSERS,
     MAX_GUARDS,
     MAX_LINES,
-    MAX_LONGITUDINAL_LINES,
     MAX_PLAYERS,
     MAX_TRANSVERSE_LINES,
     PLAYER_TOKEN_DIM,
 )
-from kilithattu_core.state import EnvState, STATUS_OUT, STATUS_PACHA, STATUS_UPPU, ZONE_FAR, ZONE_FIELD, ZONE_HOME
+from kilithattu_core.state import (
+    STATUS_OUT,
+    EnvState,
+)
 
 
 class AgentObservation(NamedTuple):
@@ -80,7 +83,9 @@ def build_line_tokens(params: EnvParams) -> tuple[Array, Array]:
 def build_global_token(state: EnvState, params: EnvParams) -> Array:
     """Construct global token (20 features) describing game time, scores, and rules."""
     g = state.global_state
-    time_rem = jnp.maximum(0.0, (params.innings_duration - g.time_elapsed) / params.innings_duration)
+    time_rem = jnp.maximum(
+        0.0, (params.innings_duration - g.time_elapsed) / params.innings_duration
+    )
     pre_clap_flag = jnp.where(~g.clapped, 1.0, 0.0)
     clap_rem = jnp.maximum(0.0, (params.clap_time - g.pre_clap_timer) / params.clap_time)
     score_diff = (g.score_attack - g.score_defence).astype(jnp.float32) / 18.0
@@ -163,7 +168,9 @@ def build_raw_player_tokens(state: EnvState, params: EnvParams) -> tuple[Array, 
     all_stamina = jnp.concatenate([c.stamina, guards.stamina, kili_stamina], axis=0)
 
     # Facing
-    guard_facings = jnp.stack([jnp.zeros_like(guards.facing), jnp.where(guards.facing == 0, -1.0, 1.0)], axis=-1)
+    guard_facings = jnp.stack(
+        [jnp.zeros_like(guards.facing), jnp.where(guards.facing == 0, -1.0, 1.0)], axis=-1
+    )
     kili_facing_y = jnp.where(kili.facing == 0, -1.0, jnp.where(kili.facing == 1, 1.0, 0.0))
     kili_facing_x = jnp.where(kili.facing == 2, 1.0, jnp.where(kili.facing == 3, -1.0, 0.0))
     kili_facings = jnp.array([[kili_facing_x, kili_facing_y]])
@@ -173,7 +180,17 @@ def build_raw_player_tokens(state: EnvState, params: EnvParams) -> tuple[Array, 
     kappa_other = jnp.zeros((MAX_GUARDS + 1,), dtype=jnp.int32)
     all_kappas = jnp.concatenate([c.kappa, kappa_other], axis=0)
 
-    return all_pos, all_vel, all_roles, all_status, all_zones, all_stamina, all_facings, all_kappas, all_active
+    return (
+        all_pos,
+        all_vel,
+        all_roles,
+        all_status,
+        all_zones,
+        all_stamina,
+        all_facings,
+        all_kappas,
+        all_active,
+    )
 
 
 def observe_agent(
@@ -183,9 +200,17 @@ def observe_agent(
     is_critic: bool = False,
 ) -> tuple[Array, Array]:
     """Construct player tokens (27 features) from the perspective of agent ego_idx."""
-    all_pos, all_vel, all_roles, all_status, all_zones, all_stamina, all_facings, all_kappas, all_active = build_raw_player_tokens(
-        state, params
-    )
+    (
+        all_pos,
+        all_vel,
+        all_roles,
+        all_status,
+        all_zones,
+        all_stamina,
+        all_facings,
+        all_kappas,
+        all_active,
+    ) = build_raw_player_tokens(state, params)
     W, L = params.field_width, params.field_length
     ego_pos = all_pos[ego_idx]
     ego_is_crosser = ego_idx < MAX_CROSSERS
@@ -244,33 +269,49 @@ def observe_agent(
     return tokens, all_active
 
 
-def compute_crosser_action_masks(c_idx: int, state: EnvState, params: EnvParams) -> tuple[Array, Array, Array]:
+def compute_crosser_action_masks(
+    c_idx: int, state: EnvState, params: EnvParams
+) -> tuple[Array, Array, Array]:
     """Compute action masks for crosser c_idx: move (9), sprint (2), call (5)."""
     c = state.crossers
     is_alive = (c.status[c_idx] != STATUS_OUT) & c.active_mask[c_idx]
     has_stamina = c.stamina[c_idx] >= params.sprint_stamina_threshold
 
     # Move mask: if dead, only Stay (0) is allowed
-    move_mask = jnp.where(is_alive, jnp.ones((9,), dtype=jnp.bool_), jnp.array([True] + [False] * 8, dtype=jnp.bool_))
-    sprint_mask = jnp.array([True, has_stamina & is_alive & params.p1_momentum_stamina], dtype=jnp.bool_)
+    move_mask = jnp.where(
+        is_alive, jnp.ones((9,), dtype=jnp.bool_), jnp.array([True] + [False] * 8, dtype=jnp.bool_)
+    )
+    sprint_mask = jnp.array(
+        [True, has_stamina & is_alive & params.p1_momentum_stamina], dtype=jnp.bool_
+    )
     call_mask = jnp.ones((5,), dtype=jnp.bool_)
     return move_mask, sprint_mask, call_mask
 
 
-def compute_guard_action_masks(g_idx: int, state: EnvState, params: EnvParams) -> tuple[Array, Array, Array]:
+def compute_guard_action_masks(
+    g_idx: int, state: EnvState, params: EnvParams
+) -> tuple[Array, Array, Array]:
     """Compute action masks for guard g_idx: move (3), dash (2), turn (2)."""
     g = state.guards
     is_active = g.active_mask[g_idx]
     has_stamina = g.stamina[g_idx] >= params.sprint_stamina_threshold
     not_turning = g.turn_timer[g_idx] <= 0.0
 
-    move_mask = jnp.where(is_active, jnp.ones((3,), dtype=jnp.bool_), jnp.array([True, False, False], dtype=jnp.bool_))
-    dash_mask = jnp.array([True, has_stamina & is_active & params.p1_momentum_stamina], dtype=jnp.bool_)
-    turn_mask = jnp.array([True, not_turning & is_active & params.p2_facing_turning], dtype=jnp.bool_)
+    move_mask = jnp.where(
+        is_active, jnp.ones((3,), dtype=jnp.bool_), jnp.array([True, False, False], dtype=jnp.bool_)
+    )
+    dash_mask = jnp.array(
+        [True, has_stamina & is_active & params.p1_momentum_stamina], dtype=jnp.bool_
+    )
+    turn_mask = jnp.array(
+        [True, not_turning & is_active & params.p2_facing_turning], dtype=jnp.bool_
+    )
     return move_mask, dash_mask, turn_mask
 
 
-def compute_kili_action_masks(state: EnvState, params: EnvParams) -> tuple[Array, Array, Array, Array]:
+def compute_kili_action_masks(
+    state: EnvState, params: EnvParams
+) -> tuple[Array, Array, Array, Array]:
     """Compute action masks for Kili: move (5), dash (2), turn (2), clap (2)."""
     kili = state.kili
     g = state.global_state
@@ -281,6 +322,10 @@ def compute_kili_action_masks(state: EnvState, params: EnvParams) -> tuple[Array
     dash_mask = jnp.array([True, has_stamina & params.p1_momentum_stamina], dtype=jnp.bool_)
     turn_mask = jnp.array([True, not_turning & params.p2_facing_turning], dtype=jnp.bool_)
 
-    can_clap = (~g.clapped) & (g.pre_clap_timer >= params.clap_window_min) & (g.pre_clap_timer <= params.clap_window_max)
+    can_clap = (
+        (~g.clapped)
+        & (g.pre_clap_timer >= params.clap_window_min)
+        & (g.pre_clap_timer <= params.clap_window_max)
+    )
     clap_mask = jnp.array([True, can_clap & params.p4_strategic_clap], dtype=jnp.bool_)
     return move_mask, dash_mask, turn_mask, clap_mask

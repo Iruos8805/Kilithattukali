@@ -3,32 +3,33 @@
 from __future__ import annotations
 
 from typing import NamedTuple
+
 import jax
 import jax.numpy as jnp
 from chex import Array, PRNGKey
 
 from kilithattu_core.config import EnvParams
-from kilithattu_core.dynamics import update_crosser_dynamics, update_guard_dynamics, update_kili_dynamics
+from kilithattu_core.dynamics import (
+    update_crosser_dynamics,
+    update_guard_dynamics,
+    update_kili_dynamics,
+)
 from kilithattu_core.events import StepEvents
-from kilithattu_core.geometry import get_box_indices
 from kilithattu_core.observe import (
     build_global_token,
     build_line_tokens,
-    compute_crosser_action_masks,
-    compute_guard_action_masks,
-    compute_kili_action_masks,
     observe_agent,
 )
 from kilithattu_core.rules import resolve_tick
 from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS, MAX_PLAYERS
 from kilithattu_core.state import (
+    STATUS_PACHA,
+    ZONE_HOME,
     CrosserState,
     EnvState,
     GlobalState,
     GuardState,
     KiliState,
-    STATUS_PACHA,
-    ZONE_HOME,
 )
 
 
@@ -88,8 +89,8 @@ class KilithattuEnv:
         p = params or self.params
         k1, k2, k3 = jax.random.split(key, 3)
 
-        W, L = p.field_width, p.field_length
-        w, d = p.lane_width, p.row_depth
+        W = p.field_width
+        w = p.lane_width
 
         # Active slot masks
         crosser_active = jnp.arange(MAX_CROSSERS) < p.num_crossers
@@ -97,7 +98,9 @@ class KilithattuEnv:
 
         # 1. Crossers placed uniformly in home zone [0, W] x [-z, 0)
         c_x = jax.random.uniform(k1, shape=(MAX_CROSSERS,), minval=0.5, maxval=W - 0.5)
-        c_y = jax.random.uniform(k2, shape=(MAX_CROSSERS,), minval=-p.safe_zone_depth + 0.2, maxval=-0.2)
+        c_y = jax.random.uniform(
+            k2, shape=(MAX_CROSSERS,), minval=-p.safe_zone_depth + 0.2, maxval=-0.2
+        )
         c_pos = jnp.stack([c_x, c_y], axis=-1)
         c_vel = jnp.zeros((MAX_CROSSERS, 2), dtype=jnp.float32)
         c_facing = jnp.tile(jnp.array([0.0, 1.0]), (MAX_CROSSERS, 1))  # Facing North toward field
@@ -182,12 +185,22 @@ class KilithattuEnv:
             state.crossers, actions.crosser_move, actions.crosser_sprint, p
         )
 
-        cand_g_x, cand_g_vx, cand_g_facing, cand_g_turn_timer, cand_g_stamina = update_guard_dynamics(
-            state.guards, actions.guard_move, actions.guard_dash, actions.guard_turn, p
+        cand_g_x, cand_g_vx, cand_g_facing, cand_g_turn_timer, cand_g_stamina = (
+            update_guard_dynamics(
+                state.guards, actions.guard_move, actions.guard_dash, actions.guard_turn, p
+            )
         )
 
-        cand_k_pos, cand_k_vel, cand_k_facing, cand_k_turn_timer, cand_k_stamina, cand_k_line_type, cand_k_line_idx = (
-            update_kili_dynamics(state.kili, actions.kili_move, actions.kili_dash, actions.kili_turn, p)
+        (
+            cand_k_pos,
+            cand_k_vel,
+            cand_k_facing,
+            cand_k_turn_timer,
+            cand_k_stamina,
+            cand_k_line_type,
+            cand_k_line_idx,
+        ) = update_kili_dynamics(
+            state.kili, actions.kili_move, actions.kili_dash, actions.kili_turn, p
         )
 
         # 2. Resolve tick rules

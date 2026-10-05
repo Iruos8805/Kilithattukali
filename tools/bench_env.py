@@ -1,9 +1,9 @@
 """Benchmark environment simulation steps per second."""
 
 import time
+
 import jax
 import jax.numpy as jnp
-
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import JointActions, KilithattuEnv
 
@@ -25,9 +25,9 @@ def run_benchmark(num_envs: int = 64, num_steps: int = 500) -> float:
 
     def step_fn(s, _):
         step_key = jax.random.PRNGKey(1)
-        o, next_s, r_A, r_D, ev = jax.vmap(lambda single_s, single_a: env.step(step_key, single_s, single_a, params))(
-            s, v_actions
-        )
+        o, next_s, r_A, r_D, ev = jax.vmap(
+            lambda single_s, single_a: env.step(step_key, single_s, single_a, params)
+        )(s, v_actions)
         return next_s, None
 
     jitted_loop = jax.jit(lambda s: jax.lax.scan(step_fn, s, None, length=num_steps))
@@ -44,7 +44,9 @@ def run_benchmark(num_envs: int = 64, num_steps: int = 500) -> float:
 
     total_ticks = num_envs * num_steps
     steps_per_sec = total_ticks / elapsed
-    print(f"Envs: {num_envs} | Steps: {num_steps} | Time: {elapsed:.3f}s | Steps/sec: {steps_per_sec:,.0f}")
+    print(
+        f"Envs: {num_envs} | Steps: {num_steps} | Time: {elapsed:.3f}s | Steps/sec: {steps_per_sec:,.0f}"
+    )
     return steps_per_sec
 
 

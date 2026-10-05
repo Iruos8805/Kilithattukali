@@ -1,11 +1,12 @@
 """Tests for scripted policies and registry loading."""
 
 import jax
-import pytest
-
-from kilithattu_agents.policy import Policy
 from kilithattu_agents.registry import load_policy
-from kilithattu_agents.scripted import ScriptedCrosserPolicy, ScriptedGuardPolicy, ScriptedKiliPolicy
+from kilithattu_agents.scripted import (
+    ScriptedCrosserPolicy,
+    ScriptedGuardPolicy,
+    ScriptedKiliPolicy,
+)
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import KilithattuEnv
 

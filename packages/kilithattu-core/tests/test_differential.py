@@ -2,8 +2,6 @@
 
 import jax
 import jax.numpy as jnp
-import pytest
-
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import JointActions, KilithattuEnv
 from kilithattu_core.reference.reference_env import ReferenceKilithattuEnv
@@ -23,7 +21,9 @@ def test_differential_step_matching():
     # Align initial positions exactly for 1:1 step tracking
     # Set crosser 0 at (3.0, -1.0), Guard 0 at (3.0, 3.0), Kili at (3.0, 0.0)
     jax_state = jax_state._replace(
-        crossers=jax_state.crossers._replace(pos=jax_state.crossers.pos.at[0].set(jnp.array([3.0, -1.0]))),
+        crossers=jax_state.crossers._replace(
+            pos=jax_state.crossers.pos.at[0].set(jnp.array([3.0, -1.0]))
+        ),
         guards=jax_state.guards._replace(x=jnp.full((MAX_GUARDS,), 0.5)),
         kili=jax_state.kili._replace(pos=jnp.array([0.5, 0.0])),
     )

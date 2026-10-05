@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
-from kilithattu_agents.policy import Policy
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import JointActions, Observations
 from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
@@ -35,7 +34,9 @@ class SlotManager:
 
         # Create slot definitions
         for i in range(params.num_crossers):
-            self.slots.append(SlotInfo(slot_idx=i, role="crosser", team="attack", is_human=(i == 0)))
+            self.slots.append(
+                SlotInfo(slot_idx=i, role="crosser", team="attack", is_human=(i == 0))
+            )
         for k in range(params.num_guards):
             idx = MAX_CROSSERS + k
             self.slots.append(SlotInfo(slot_idx=idx, role="guard", team="defence", is_human=False))

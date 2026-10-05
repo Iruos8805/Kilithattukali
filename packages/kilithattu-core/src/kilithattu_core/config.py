@@ -83,7 +83,9 @@ class EnvParams:
     sticky_action_prob: float = 0.0
 
     # Reward shaping
-    shaping_beta: float = 0.0  # Potential-based shaping coefficient (0.0 in pure zero-sum evaluation)
+    shaping_beta: float = (
+        0.0  # Potential-based shaping coefficient (0.0 in pure zero-sum evaluation)
+    )
 
     @property
     def field_width(self) -> float:

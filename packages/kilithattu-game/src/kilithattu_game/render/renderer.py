@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
+
 import pygame
 from kilithattu_core.config import EnvParams
-from kilithattu_core.state import EnvState, STATUS_OUT, STATUS_PACHA, STATUS_UPPU
+from kilithattu_core.state import STATUS_OUT, STATUS_UPPU, EnvState
 
 
 class GameRenderer:
@@ -51,7 +51,9 @@ class GameRenderer:
         sy = int(self.origin_y - y * self.scale_y)
         return sx, sy
 
-    def add_popup(self, text: str, x: float, y: float, color: tuple[int, int, int] = (255, 230, 80)) -> None:
+    def add_popup(
+        self, text: str, x: float, y: float, color: tuple[int, int, int] = (255, 230, 80)
+    ) -> None:
         self.popups.append({"text": text, "x": x, "y": y, "color": color, "ttl": 40, "max_ttl": 40})
 
     def render(
@@ -80,7 +82,9 @@ class GameRenderer:
         pygame.draw.rect(self.screen, (160, 210, 175), home_rect, 2)
 
         home_label = self.font_small.render("HOME ZONE (Safe) — PACHA", True, (60, 130, 80))
-        self.screen.blit(home_label, (home_rect.centerx - home_label.get_width() // 2, home_rect.centery - 8))
+        self.screen.blit(
+            home_label, (home_rect.centerx - home_label.get_width() // 2, home_rect.centery - 8)
+        )
 
         # Far safe zone (y in (L, L + z])
         fx, fy = self.world_to_screen(0.0, L + z)
@@ -89,7 +93,9 @@ class GameRenderer:
         pygame.draw.rect(self.screen, (160, 195, 240), far_rect, 2)
 
         far_label = self.font_small.render("FAR ZONE (Safe) → UPPU", True, (50, 100, 180))
-        self.screen.blit(far_label, (far_rect.centerx - far_label.get_width() // 2, far_rect.centery - 8))
+        self.screen.blit(
+            far_label, (far_rect.centerx - far_label.get_width() // 2, far_rect.centery - 8)
+        )
 
         # 2. Draw Court Boxes & Alternating Tints
         for r in range(params.num_rows):
@@ -108,7 +114,7 @@ class GameRenderer:
             line_y = k * d
             p1 = self.world_to_screen(0.0, line_y)
             p2 = self.world_to_screen(W, line_y)
-            is_outer = (k == 0 or k == params.num_rows)
+            is_outer = k == 0 or k == params.num_rows
             color = (180, 50, 30) if is_outer else (255, 255, 255)
             thickness = 4 if is_outer else 3
             pygame.draw.line(self.screen, color, p1, p2, thickness)
@@ -122,7 +128,7 @@ class GameRenderer:
             line_x = j * w
             p1 = self.world_to_screen(line_x, 0.0)
             p2 = self.world_to_screen(line_x, L)
-            is_side = (j == 0 or j == params.num_lanes)
+            is_side = j == 0 or j == params.num_lanes
             color = (180, 50, 30) if is_side else (240, 240, 240)
             thickness = 4 if is_side else 3
             pygame.draw.line(self.screen, color, p1, p2, thickness)
@@ -165,7 +171,9 @@ class GameRenderer:
         pygame.draw.circle(self.screen, (255, 100, 100), (ksx, ksy), reach_px, 1)
 
         kili_lbl = self.font_small.render("KILI", True, (255, 255, 255))
-        self.screen.blit(kili_lbl, (ksx - kili_lbl.get_width() // 2, ksy - kili_lbl.get_height() // 2))
+        self.screen.blit(
+            kili_lbl, (ksx - kili_lbl.get_width() // 2, ksy - kili_lbl.get_height() // 2)
+        )
 
         # 7. Render Crossers
         crossers = state.crossers
@@ -176,7 +184,7 @@ class GameRenderer:
                 csx, csy = self.world_to_screen(cx, cy)
                 status = int(crossers.status[c_idx])
 
-                is_human = (c_idx == human_slot_idx)
+                is_human = c_idx == human_slot_idx
 
                 # Pulsing golden halo for human-controlled crosser
                 if is_human:
@@ -185,8 +193,12 @@ class GameRenderer:
                 if status == STATUS_OUT:
                     # Grey cross
                     pygame.draw.circle(self.screen, (150, 150, 155), (csx, csy), 11)
-                    pygame.draw.line(self.screen, (230, 70, 70), (csx - 7, csy - 7), (csx + 7, csy + 7), 2)
-                    pygame.draw.line(self.screen, (230, 70, 70), (csx - 7, csy + 7), (csx + 7, csy - 7), 2)
+                    pygame.draw.line(
+                        self.screen, (230, 70, 70), (csx - 7, csy - 7), (csx + 7, csy + 7), 2
+                    )
+                    pygame.draw.line(
+                        self.screen, (230, 70, 70), (csx - 7, csy + 7), (csx + 7, csy - 7), 2
+                    )
                 elif status == STATUS_UPPU:
                     # White Salt Diamond / Bright Cyan
                     pygame.draw.circle(self.screen, (245, 250, 255), (csx, csy), 13)
@@ -227,7 +239,9 @@ class GameRenderer:
         time_surf = self.font_medium.render(time_text, True, (230, 240, 255))
         self.screen.blit(time_surf, (self.width - 200, 18))
 
-        clap_status = "LIVE PLAY" if bool(g.clapped) else f"WAITING FOR CLAP ({float(g.pre_clap_timer):.1f}s)"
+        clap_status = (
+            "LIVE PLAY" if bool(g.clapped) else f"WAITING FOR CLAP ({float(g.pre_clap_timer):.1f}s)"
+        )
         clap_color = (80, 230, 120) if bool(g.clapped) else (255, 160, 60)
         clap_surf = self.font_small.render(clap_status, True, clap_color)
         self.screen.blit(clap_surf, (self.width // 2 - clap_surf.get_width() // 2, 22))
@@ -235,6 +249,8 @@ class GameRenderer:
         # Bottom Instructions
         controls_text = "Controls: WASD=Move | Shift=Sprint | Tab=Switch Crosser | Q=Turn | Space=Clap | Esc=Menu"
         controls_surf = self.font_small.render(controls_text, True, (120, 110, 100))
-        self.screen.blit(controls_surf, (self.width // 2 - controls_surf.get_width() // 2, self.height - 25))
+        self.screen.blit(
+            controls_surf, (self.width // 2 - controls_surf.get_width() // 2, self.height - 25)
+        )
 
         pygame.display.flip()

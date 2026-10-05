@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
+
 import jax
-import jax.numpy as jnp
-from chex import Array, PRNGKey
+from chex import PRNGKey
+from kilithattu_core.env import Observations
 
 from kilithattu_agents.policy import Policy, PolicyInfo
-from kilithattu_core.env import Observations
 
 
 class HumanFairPolicyWrapper:

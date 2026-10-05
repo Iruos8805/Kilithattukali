@@ -8,20 +8,25 @@ from chex import Array
 
 from kilithattu_core.config import EnvParams
 from kilithattu_core.events import StepEvents
-from kilithattu_core.geometry import continuous_swept_tag, get_box_indices, is_in_safe_zone, is_side_exit
+from kilithattu_core.geometry import (
+    continuous_swept_tag,
+    get_box_indices,
+    is_in_safe_zone,
+    is_side_exit,
+)
 from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
 from kilithattu_core.state import (
-    CrosserState,
-    EnvState,
-    GlobalState,
-    GuardState,
-    KiliState,
     STATUS_OUT,
     STATUS_PACHA,
     STATUS_UPPU,
     ZONE_FAR,
     ZONE_FIELD,
     ZONE_HOME,
+    CrosserState,
+    EnvState,
+    GlobalState,
+    GuardState,
+    KiliState,
 )
 
 
@@ -66,10 +71,12 @@ def resolve_tick(
         now_clapped = g.clapped | auto_clap
         clap_event = auto_clap
     else:
-        window_open = (g.pre_clap_timer >= params.clap_window_min) & (g.pre_clap_timer <= params.clap_window_max)
+        window_open = (g.pre_clap_timer >= params.clap_window_min) & (
+            g.pre_clap_timer <= params.clap_window_max
+        )
         manual_clap = window_open & (kili_clap_action == 1) & (~g.clapped)
         force_clap = (g.pre_clap_timer + params.dt >= params.clap_window_max) & (~g.clapped)
-        clap_fired = (manual_clap | force_clap)
+        clap_fired = manual_clap | force_clap
         now_clapped = g.clapped | clap_fired
         clap_event = clap_fired
 
@@ -84,7 +91,9 @@ def resolve_tick(
     false_started = jnp.zeros((MAX_CROSSERS,), dtype=jnp.bool_)
     if params.p4_strategic_clap:
         # P4: Crossing L0 before clap is false start -> OUT
-        attempted_cross = (~g.clapped) & (end_pos_c[:, 1] >= 0.0) & (c.status != STATUS_OUT) & c.active_mask
+        attempted_cross = (
+            (~g.clapped) & (end_pos_c[:, 1] >= 0.0) & (c.status != STATUS_OUT) & c.active_mask
+        )
         false_started = attempted_cross
     else:
         # Classic: Crossers clamped behind L0 prior to clap
@@ -108,9 +117,7 @@ def resolve_tick(
         p_g_end = jnp.array([cand_guard_x[j_g], guard_line_y])
 
         hit, p_c_tau = continuous_swept_tag(
-            start_pos_c[i_c], end_pos_c[i_c],
-            p_g_start, p_g_end,
-            params.r_tag
+            start_pos_c[i_c], end_pos_c[i_c], p_g_start, p_g_end, params.r_tag
         )
         in_safe = is_in_safe_zone(p_c_tau, params)
 
@@ -135,9 +142,7 @@ def resolve_tick(
     def check_kili_tag(i_c):
         crosser_active = c.active_mask[i_c] & (c.status[i_c] != STATUS_OUT)
         hit, p_c_tau = continuous_swept_tag(
-            start_pos_c[i_c], end_pos_c[i_c],
-            kili.pos, cand_kili_pos,
-            params.r_tag
+            start_pos_c[i_c], end_pos_c[i_c], kili.pos, cand_kili_pos, params.r_tag
         )
         in_safe = is_in_safe_zone(p_c_tau, params)
         if params.p2_facing_turning:
@@ -160,10 +165,10 @@ def resolve_tick(
     salt_delivered = jnp.zeros((MAX_CROSSERS,), dtype=jnp.bool_)
     crosser_points = jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32)
 
-    n_B = params.num_rows
-
     def evaluate_crossing(i):
-        survived = (~eliminated_now[i]) & (c.status[i] != STATUS_OUT) & c.active_mask[i] & now_clapped
+        survived = (
+            (~eliminated_now[i]) & (c.status[i] != STATUS_OUT) & c.active_mask[i] & now_clapped
+        )
         k_curr = c.kappa[i]
         st_curr = c.status[i]
         y0 = start_pos_c[i, 1]

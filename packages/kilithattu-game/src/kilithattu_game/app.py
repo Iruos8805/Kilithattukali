@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import sys
 
 from kilithattu_agents.registry import load_policy
-from kilithattu_core.config import EnvParams, load_env_params
+from kilithattu_core.config import load_env_params
 from kilithattu_core.env import KilithattuEnv
 from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
+
 from kilithattu_game.controllers.human import HumanController
 from kilithattu_game.controllers.scripted import ScriptedController
 from kilithattu_game.loop import GameLoop
@@ -27,9 +27,9 @@ def create_game(
     slot_manager = SlotManager(params)
 
     # Resolve AI policies
-    crosser_ai = load_policy(f"scripted:crosser")
-    guard_ai = load_policy(f"scripted:guard")
-    kili_ai = load_policy(f"scripted:kili")
+    crosser_ai = load_policy("scripted:crosser")
+    guard_ai = load_policy("scripted:guard")
+    kili_ai = load_policy("scripted:kili")
 
     if mode == "play_crosser":
         # Slot 0 is human crosser; remaining slots are AI
@@ -100,7 +100,9 @@ def main() -> None:
         headless=args.headless,
     )
     results = game.run(max_ticks=args.ticks)
-    print(f"Match ended! Attack Score: {results['score_attack']} | Defence: {results['score_defence']}")
+    print(
+        f"Match ended! Attack Score: {results['score_attack']} | Defence: {results['score_defence']}"
+    )
 
 
 if __name__ == "__main__":

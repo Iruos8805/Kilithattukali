@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
 from chex import Array
 
@@ -88,7 +87,9 @@ def point_line_distance(pos: Array, p1: Array, p2: Array) -> Array:
     line_vec = p2 - p1
     point_vec = pos - p1
     line_len_sq = jnp.dot(line_vec, line_vec)
-    t = jnp.where(line_len_sq > 1e-8, jnp.clip(jnp.dot(point_vec, line_vec) / line_len_sq, 0.0, 1.0), 0.0)
+    t = jnp.where(
+        line_len_sq > 1e-8, jnp.clip(jnp.dot(point_vec, line_vec) / line_len_sq, 0.0, 1.0), 0.0
+    )
     proj = p1 + t * line_vec
     diff = pos - proj
     return jnp.sqrt(jnp.dot(diff, diff))

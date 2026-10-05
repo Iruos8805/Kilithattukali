@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from typing import NamedTuple
-from chex import Array
 
-from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
+from chex import Array
 
 # Status Constants
 STATUS_OUT: int = 0

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
+
 import numpy as np
 from chex import PRNGKey
+from kilithattu_core.env import Observations
+from kilithattu_core.spaces import MAX_CROSSERS, MAX_PLAYERS
 
 from kilithattu_agents.policy import Policy, PolicyInfo
-from kilithattu_core.env import Observations
-from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS, MAX_PLAYERS
 
 
 class ScriptedCrosserPolicy(Policy):
@@ -44,9 +45,6 @@ class ScriptedCrosserPolicy(Policy):
         if is_out:
             return {"move": 0, "sprint": 0, "call": 0}, carry, PolicyInfo()
 
-        ego_abs_x = ego_tok[14] * 6.0
-        ego_abs_y = ego_tok[15] * 15.0
-
         # Extract defender positions
         defender_positions = []
         for j in range(MAX_CROSSERS, MAX_PLAYERS):
@@ -62,7 +60,6 @@ class ScriptedCrosserPolicy(Policy):
         sprint_action = 1 if self.aggression > 0.6 else 0
 
         # Check nearest defender threat
-        min_dist = min([d[2] for d in defender_positions]) if defender_positions else 99.0
         threat = [d for d in defender_positions if d[2] < 2.0]
 
         if is_pacha:

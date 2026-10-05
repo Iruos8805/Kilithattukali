@@ -2,8 +2,6 @@
 
 import jax
 import jax.numpy as jnp
-import pytest
-
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import JointActions, KilithattuEnv
 from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
@@ -125,7 +123,9 @@ def test_full_round_trip_18_points():
     # 1. Outbound crossings L0..L5
     # Crossing L0
     curr_state = curr_state._replace(
-        crossers=curr_state.crossers._replace(pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, -0.05])))
+        crossers=curr_state.crossers._replace(
+            pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, -0.05]))
+        )
     )
     actions = JointActions.default()._replace(
         crosser_move=jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32).at[0].set(1)
@@ -137,14 +137,18 @@ def test_full_round_trip_18_points():
     for k in range(1, params.num_rows):
         line_y = k * d
         curr_state = curr_state._replace(
-            crossers=curr_state.crossers._replace(pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, line_y - 0.05])))
+            crossers=curr_state.crossers._replace(
+                pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, line_y - 0.05]))
+            )
         )
         obs, curr_state, r_A, r_D, events = env.step(key, curr_state, actions, params)
         total_points += int(events.points_attack)
 
     # Crossing L5 into Far Zone
     curr_state = curr_state._replace(
-        crossers=curr_state.crossers._replace(pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, L - 0.05])))
+        crossers=curr_state.crossers._replace(
+            pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, L - 0.05]))
+        )
     )
     obs, curr_state, r_A, r_D, events = env.step(key, curr_state, actions, params)
     total_points += int(events.points_attack)
@@ -156,7 +160,9 @@ def test_full_round_trip_18_points():
         crosser_move=jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32).at[0].set(5)
     )
     curr_state = curr_state._replace(
-        crossers=curr_state.crossers._replace(pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, L + 0.1])))
+        crossers=curr_state.crossers._replace(
+            pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, L + 0.1]))
+        )
     )
     obs, curr_state, r_A, r_D, events = env.step(key, curr_state, actions_south, params)
     total_points += int(events.points_attack)
@@ -165,14 +171,18 @@ def test_full_round_trip_18_points():
     for k in range(params.num_rows - 1, 0, -1):
         line_y = k * d
         curr_state = curr_state._replace(
-            crossers=curr_state.crossers._replace(pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, line_y + 0.05])))
+            crossers=curr_state.crossers._replace(
+                pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, line_y + 0.05]))
+            )
         )
         obs, curr_state, r_A, r_D, events = env.step(key, curr_state, actions_south, params)
         total_points += int(events.points_attack)
 
     # Crossing L0 into Home (Salt Delivery)
     curr_state = curr_state._replace(
-        crossers=curr_state.crossers._replace(pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, 0.05])))
+        crossers=curr_state.crossers._replace(
+            pos=curr_state.crossers.pos.at[0].set(jnp.array([3.0, 0.05]))
+        )
     )
     obs, curr_state, r_A, r_D, events = env.step(key, curr_state, actions_south, params)
     total_points += int(events.points_attack)
@@ -195,10 +205,17 @@ def test_foul_uppu_pacha_same_box():
     # Crosser 1 is Uppu, enters box (0, 2) this tick from (1.5, 9.1) -> (1.5, 8.9)
     state = state._replace(
         crossers=state.crossers._replace(
-            pos=state.crossers.pos.at[0].set(jnp.array([1.5, 7.5])).at[1].set(jnp.array([1.5, 9.1])),
+            pos=state.crossers.pos.at[0]
+            .set(jnp.array([1.5, 7.5]))
+            .at[1]
+            .set(jnp.array([1.5, 9.1])),
             status=state.crossers.status.at[0].set(STATUS_PACHA).at[1].set(STATUS_UPPU),
-            box=jnp.array([[0, 2], [0, 3], [-1, -1], [-1, -1], [-1, -1], [-1, -1]], dtype=jnp.int32),
-            prev_box=jnp.array([[0, 2], [0, 3], [-1, -1], [-1, -1], [-1, -1], [-1, -1]], dtype=jnp.int32),
+            box=jnp.array(
+                [[0, 2], [0, 3], [-1, -1], [-1, -1], [-1, -1], [-1, -1]], dtype=jnp.int32
+            ),
+            prev_box=jnp.array(
+                [[0, 2], [0, 3], [-1, -1], [-1, -1], [-1, -1], [-1, -1]], dtype=jnp.int32
+            ),
         ),
         # Guard and Kili away
         guards=state.guards._replace(x=jnp.full((MAX_GUARDS,), 5.5)),

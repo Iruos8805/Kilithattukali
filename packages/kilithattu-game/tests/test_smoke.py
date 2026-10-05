@@ -1,8 +1,5 @@
 """Headless smoke tests for game loop and modes."""
 
-import os
-import pytest
-
 from kilithattu_game.app import create_game
 
 

@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-import numpy as np
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 
-from kilithattu_core.config import EnvParams, rules_hash
+from kilithattu_core.config import EnvParams
 from kilithattu_core.env import JointActions, KilithattuEnv
 from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
 
@@ -89,9 +90,15 @@ def verify_replay(replay_dir: str | Path) -> bool:
             crosser_move=jnp.array(act_t[:MAX_CROSSERS, 0], dtype=jnp.int32),
             crosser_sprint=jnp.array(act_t[:MAX_CROSSERS, 1], dtype=jnp.int32),
             crosser_call=jnp.array(act_t[:MAX_CROSSERS, 2], dtype=jnp.int32),
-            guard_move=jnp.array(act_t[MAX_CROSSERS : MAX_CROSSERS + MAX_GUARDS, 0], dtype=jnp.int32),
-            guard_dash=jnp.array(act_t[MAX_CROSSERS : MAX_CROSSERS + MAX_GUARDS, 1], dtype=jnp.int32),
-            guard_turn=jnp.array(act_t[MAX_CROSSERS : MAX_CROSSERS + MAX_GUARDS, 2], dtype=jnp.int32),
+            guard_move=jnp.array(
+                act_t[MAX_CROSSERS : MAX_CROSSERS + MAX_GUARDS, 0], dtype=jnp.int32
+            ),
+            guard_dash=jnp.array(
+                act_t[MAX_CROSSERS : MAX_CROSSERS + MAX_GUARDS, 1], dtype=jnp.int32
+            ),
+            guard_turn=jnp.array(
+                act_t[MAX_CROSSERS : MAX_CROSSERS + MAX_GUARDS, 2], dtype=jnp.int32
+            ),
             kili_move=jnp.array(act_t[-1, 0], dtype=jnp.int32),
             kili_dash=jnp.array(act_t[-1, 1], dtype=jnp.int32),
             kili_turn=jnp.array(act_t[-1, 2], dtype=jnp.int32),

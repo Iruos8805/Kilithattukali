@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
 import jax
-from chex import PRNGKey
-
 from kilithattu_agents.policy import Policy
 from kilithattu_core.env import Observations
 

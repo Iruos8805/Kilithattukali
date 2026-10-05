@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from typing import Any, NamedTuple, Protocol
-from chex import Array, PRNGKey
 
+from chex import Array, PRNGKey
 from kilithattu_core.env import Observations
 
 

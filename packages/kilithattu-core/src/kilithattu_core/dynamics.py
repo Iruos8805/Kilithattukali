@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
 from chex import Array
 
 from kilithattu_core.config import EnvParams
 from kilithattu_core.spaces import CROSSER_MOVE_VECTORS, GUARD_MOVE_VECTORS, KILI_MOVE_VECTORS
-from kilithattu_core.state import CrosserState, GuardState, KiliState, STATUS_OUT
+from kilithattu_core.state import STATUS_OUT, CrosserState, GuardState, KiliState
 
 
 def update_crosser_dynamics(
@@ -147,7 +146,9 @@ def update_kili_dynamics(
 
     # Current state
     x, y = kili.pos[0], kili.pos[1]
-    is_transverse = kili.current_line_type == 0  # 0: transverse (constant y), 1: longitudinal (constant x)
+    is_transverse = (
+        kili.current_line_type == 0
+    )  # 0: transverse (constant y), 1: longitudinal (constant x)
 
     # 1. Moving along current line
     # On transverse line, allowed along-line moves are E (move_action=2) and W (move_action=4)

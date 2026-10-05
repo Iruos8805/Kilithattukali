@@ -1,12 +1,11 @@
 """Balance evaluation tool sweeping speed ratios, r_tag, and assessing win/all-out rates."""
 
 import os
+
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 import jax
-import jax.numpy as jnp
 import numpy as np
-
 from kilithattu_agents.scripted.crosser import ScriptedCrosserPolicy
 from kilithattu_agents.scripted.guard import ScriptedGuardPolicy
 from kilithattu_agents.scripted.kili import ScriptedKiliPolicy
@@ -72,7 +71,9 @@ def evaluate_balance(
 
     mean_ppi = float(np.mean(scores))
     all_out_rate = float(all_out_count / num_innings)
-    print(f"r_tag={r_tag:.2f} | speeds=({crosser_speed}, {guard_speed}, {kili_speed}) -> PPI={mean_ppi:.2f} | All-out rate={all_out_rate*100:.1f}%")
+    print(
+        f"r_tag={r_tag:.2f} | speeds=({crosser_speed}, {guard_speed}, {kili_speed}) -> PPI={mean_ppi:.2f} | All-out rate={all_out_rate * 100:.1f}%"
+    )
     return {"ppi": mean_ppi, "all_out_rate": all_out_rate}
 
 

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
+
 import numpy as np
 from chex import PRNGKey
+from kilithattu_core.env import Observations
+from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
 
 from kilithattu_agents.policy import Policy, PolicyInfo
-from kilithattu_core.env import Observations
-from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS, MAX_PLAYERS
 
 
 class ScriptedKiliPolicy(Policy):

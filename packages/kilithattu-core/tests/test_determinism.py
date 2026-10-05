@@ -2,14 +2,12 @@
 
 import tempfile
 from pathlib import Path
-import jax
-import jax.numpy as jnp
-import numpy as np
-import pytest
 
+import jax
+import numpy as np
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import JointActions, KilithattuEnv
-from kilithattu_core.replay import read_replay, verify_replay, write_replay
+from kilithattu_core.replay import verify_replay, write_replay
 from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
 
 
@@ -36,7 +34,9 @@ def test_bit_for_bit_determinism():
                 guard_move=g_move,
             )
             obs, state, r_A, r_D, events = env.step(key, state, actions, params)
-            states.append((state.crossers.pos, state.crossers.status, state.global_state.score_attack))
+            states.append(
+                (state.crossers.pos, state.crossers.status, state.global_state.score_attack)
+            )
             events_list.append(events.points_attack)
         return states, events_list
 

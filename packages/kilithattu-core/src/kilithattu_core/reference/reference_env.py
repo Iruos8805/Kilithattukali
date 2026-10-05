@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -52,7 +51,14 @@ class ReferenceKilithattuEnv:
         self.done = False
 
         self.crossers = [
-            ReferenceCrosser(x=1.0 + i * 1.0, y=-1.0, status="pacha", kappa=0, trips=0, active=(i < p.num_crossers))
+            ReferenceCrosser(
+                x=1.0 + i * 1.0,
+                y=-1.0,
+                status="pacha",
+                kappa=0,
+                trips=0,
+                active=(i < p.num_crossers),
+            )
             for i in range(p.num_crossers)
         ]
         self.guards = [
@@ -165,7 +171,12 @@ class ReferenceKilithattuEnv:
                         c.kappa = p.num_rows + 1
                         c.status = "uppu"
                         pts += 1
-                    elif 1 <= line_k < p.num_rows and y0 < line_y and y1 >= line_y and c.kappa == line_k:
+                    elif (
+                        1 <= line_k < p.num_rows
+                        and y0 < line_y
+                        and y1 >= line_y
+                        and c.kappa == line_k
+                    ):
                         c.kappa = line_k + 1
                         pts += 1
 
@@ -174,12 +185,22 @@ class ReferenceKilithattuEnv:
                     if line_k == p.num_rows and y0 > L and y1 <= L and c.kappa == p.num_rows + 1:
                         c.kappa = p.num_rows + 2
                         pts += 1
-                    elif line_k == 0 and y0 >= 0.0 and y1 < 0.0 and c.kappa == 2 * (p.num_rows + 1) - 1:
+                    elif (
+                        line_k == 0
+                        and y0 >= 0.0
+                        and y1 < 0.0
+                        and c.kappa == 2 * (p.num_rows + 1) - 1
+                    ):
                         c.kappa = 0
                         c.trips += 1
                         c.status = "pacha"
                         pts += 7  # 1 crossing + 6 bonus
-                    elif 1 <= line_k < p.num_rows and y0 > line_y and y1 <= line_y and c.kappa == inbound_req:
+                    elif (
+                        1 <= line_k < p.num_rows
+                        and y0 > line_y
+                        and y1 <= line_y
+                        and c.kappa == inbound_req
+                    ):
                         c.kappa = inbound_req + 1
                         pts += 1
 

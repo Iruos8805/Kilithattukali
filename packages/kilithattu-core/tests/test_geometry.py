@@ -1,10 +1,13 @@
 """Tests for geometry, box lookups, and swept collision detection."""
 
 import jax.numpy as jnp
-import pytest
-
 from kilithattu_core.config import EnvParams
-from kilithattu_core.geometry import continuous_swept_tag, get_box_indices, is_in_safe_zone, is_side_exit
+from kilithattu_core.geometry import (
+    continuous_swept_tag,
+    get_box_indices,
+    is_in_safe_zone,
+    is_side_exit,
+)
 
 
 def test_box_indices():

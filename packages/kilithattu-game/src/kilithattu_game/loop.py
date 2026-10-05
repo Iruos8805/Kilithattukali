@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import os
 import time
+
 import jax
 import pygame
-from chex import PRNGKey
-
 from kilithattu_core.config import EnvParams
 from kilithattu_core.env import KilithattuEnv
+
 from kilithattu_game.controllers.human import HumanController
 from kilithattu_game.render.renderer import GameRenderer
 from kilithattu_game.slots import SlotManager
@@ -90,7 +90,9 @@ class GameLoop:
 
                 # Step JAX simulation
                 k_step, key = jax.random.split(key)
-                obs, state, r_A, r_D, events = self.env.step(k_step, state, joint_actions, self.params)
+                obs, state, r_A, r_D, events = self.env.step(
+                    k_step, state, joint_actions, self.params
+                )
 
                 # Trigger renderer popup notifications on events
                 if self.renderer:
@@ -98,17 +100,26 @@ class GameLoop:
                         self.renderer.add_popup("CLAP! Play Starts!", 3.0, 0.0, (255, 230, 80))
                     for i in range(self.params.num_crossers):
                         if bool(events.tagged[i]):
-                            cx, cy = float(state.crossers.pos[i, 0]), float(state.crossers.pos[i, 1])
+                            cx, cy = (
+                                float(state.crossers.pos[i, 0]),
+                                float(state.crossers.pos[i, 1]),
+                            )
                             self.renderer.add_popup("OUT (TAGGED)!", cx, cy, (240, 60, 60))
                         elif bool(events.fouled[i]):
-                            cx, cy = float(state.crossers.pos[i, 0]), float(state.crossers.pos[i, 1])
+                            cx, cy = (
+                                float(state.crossers.pos[i, 0]),
+                                float(state.crossers.pos[i, 1]),
+                            )
                             self.renderer.add_popup("FOUL! OUT!", cx, cy, (255, 80, 80))
                         elif bool(events.salt_delivered[i]):
                             self.renderer.add_popup("SALT DELIVERED! +6", 3.0, -1.0, (255, 215, 0))
                         elif int(events.line_crossed[i]) >= 0:
                             line_k = int(events.line_crossed[i])
                             text = "UPPU!" if line_k == self.params.num_rows else "+1"
-                            cx, cy = float(state.crossers.pos[i, 0]), float(state.crossers.pos[i, 1])
+                            cx, cy = (
+                                float(state.crossers.pos[i, 0]),
+                                float(state.crossers.pos[i, 1]),
+                            )
                             self.renderer.add_popup(text, cx, cy, (100, 240, 140))
 
                 tick_count += 1
@@ -121,7 +132,10 @@ class GameLoop:
             if self.renderer and not self.headless:
                 interp = accumulator / sim_dt
                 self.renderer.render(
-                    state, self.params, human_slot_idx=self.slot_manager.human_crosser_idx, interp_alpha=interp
+                    state,
+                    self.params,
+                    human_slot_idx=self.slot_manager.human_crosser_idx,
+                    interp_alpha=interp,
                 )
                 self.clock.tick(60)
             elif self.headless and max_ticks:

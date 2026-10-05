@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from typing import NamedTuple
-from chex import Array
+
 import jax.numpy as jnp
+from chex import Array
 
 from kilithattu_core.spaces import MAX_CROSSERS
 

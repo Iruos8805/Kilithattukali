@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
+
 import numpy as np
 from chex import PRNGKey
-
-from kilithattu_agents.policy import Policy, PolicyInfo
 from kilithattu_core.env import Observations
 from kilithattu_core.spaces import MAX_CROSSERS
+
+from kilithattu_agents.policy import Policy, PolicyInfo
 
 
 class ScriptedGuardPolicy(Policy):
@@ -28,9 +29,6 @@ class ScriptedGuardPolicy(Policy):
         agent_idx: int,  # MAX_CROSSERS .. MAX_CROSSERS + MAX_GUARDS - 1
         mask: Any = None,
     ) -> tuple[dict[str, int], Any, PolicyInfo]:
-        ego_tok = np.array(obs.player_tokens[agent_idx, agent_idx])
-        ego_x = ego_tok[14] * 6.0
-
         # Scan active crossers and find closest in y to ego's line
         threats = []
         for i in range(MAX_CROSSERS):
