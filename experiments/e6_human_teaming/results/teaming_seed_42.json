@@ -1,0 +1,22 @@
+{
+  "partner_agg_0.2": {
+    "partner_aggression": 0.2,
+    "mean_score": 9.0,
+    "all_out_rate": 1.0
+  },
+  "partner_agg_0.5": {
+    "partner_aggression": 0.5,
+    "mean_score": 9.0,
+    "all_out_rate": 1.0
+  },
+  "partner_agg_0.8": {
+    "partner_aggression": 0.8,
+    "mean_score": 9.0,
+    "all_out_rate": 1.0
+  },
+  "partner_agg_1.0": {
+    "partner_aggression": 1.0,
+    "mean_score": 9.0,
+    "all_out_rate": 1.0
+  }
+}

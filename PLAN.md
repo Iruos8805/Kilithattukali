@@ -705,6 +705,7 @@ def update_step(runner_state, _):
     runner_state = ppo_update(runner_state, traj, (adv_A, ret_A), (adv_D, ret_D))
     return runner_state, metrics(traj)
 
+
 train = jax.jit(lambda s: jax.lax.scan(update_step, s, None, length=NUM_UPDATES))
 ```
 
@@ -1292,32 +1293,47 @@ These are the contracts between packages. Everything else is internal and free t
 
 ```python
 # ── kilithattu_core ────────────────────────────────────────────────────────────
-ENV_VERSION: str                                   # semantic version of step() behaviour
+ENV_VERSION: str  # semantic version of step() behaviour
+
 
 def make_env(params: EnvParams) -> KilithattuEnv: ...
 def rules_hash(params: EnvParams) -> str: ...
 
+
 class KilithattuEnv:
     def reset(self, key: PRNGKey, params: EnvParams) -> tuple[Obs, EnvState]: ...
-    def step(self, key: PRNGKey, state: EnvState, actions: Actions, params: EnvParams
-             ) -> tuple[Obs, EnvState, Rewards, Dones, Events]: ...
+    def step(
+        self, key: PRNGKey, state: EnvState, actions: Actions, params: EnvParams
+    ) -> tuple[Obs, EnvState, Rewards, Dones, Events]: ...
     def critic_state(self, state: EnvState, params: EnvParams) -> CriticObs: ...
 
+
 def write_replay(path: Path, header: ReplayHeader, actions: Array, events: Events) -> None: ...
-def verify_replay(path: Path) -> bool: ...        # re-simulates and compares the event log
+def verify_replay(path: Path) -> bool: ...  # re-simulates and compares the event log
+
 
 # ── kilithattu_agents ──────────────────────────────────────────────────────────
-class Policy(Protocol):                           # RL networks and scripted bots both implement this
+class Policy(Protocol):  # RL networks and scripted bots both implement this
     def init_carry(self, num_agents: int) -> Carry: ...
-    def act(self, key: PRNGKey, carry: Carry, obs: Obs, mask: ActionMask
-            ) -> tuple[Actions, Carry, PolicyInfo]: ...   # PolicyInfo: value, attention (for overlays)
+    def act(
+        self, key: PRNGKey, carry: Carry, obs: Obs, mask: ActionMask
+    ) -> tuple[Actions, Carry, PolicyInfo]: ...  # PolicyInfo: value, attention (for overlays)
+
 
 def load_policy(ref: str) -> Policy: ...
+
+
 # refs: "main@hard", "teammate@medium", "run:<run_id>/step:<n>", "scripted:guard?aggression=0.7"
 
+
 # ── kilithattu_eval ────────────────────────────────────────────────────────────
-def play_innings(attack: Policy, defence: Policy, params: EnvParams, n: int, key: PRNGKey) -> InningsResults: ...
-def play_matches(team_a: Team, team_b: Team, params: EnvParams, n: int, key: PRNGKey) -> MatchResults: ...
+def play_innings(
+    attack: Policy, defence: Policy, params: EnvParams, n: int, key: PRNGKey
+) -> InningsResults: ...
+def play_matches(
+    team_a: Team, team_b: Team, params: EnvParams, n: int, key: PRNGKey
+) -> MatchResults: ...
+
 
 # ── kilithattu_game ────────────────────────────────────────────────────────────
 class Controller(Protocol):
