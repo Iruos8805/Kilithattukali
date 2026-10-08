@@ -1,10 +1,10 @@
-"""Configuration schema, default parameters, and rule hash computation."""
-
+"""Environment parameters, rule toggles (Classic / Kilithattu+), YAML presets and the rules hash."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,120 +13,157 @@ import yaml
 
 @dataclass(frozen=True)
 class EnvParams:
-    """Complete physical, topological, and rule parameters for Kilithattu Kali."""
+    """All rule parameters. Frozen and hashable, so it can be closed over by jitted functions.
 
-    # Geometry
-    num_lanes: int = 2
-    num_rows: int = 5
-    lane_width: float = 3.0
-    row_depth: float = 3.0
-    safe_zone_depth: float = 2.0
+    Defaults are the Classic rule set of PLAN.md section 4.6 with balance v1 speeds (RULES.md section 9). Toggles P1-P4 and P6 are implemented in the
+    environment; P5 (procedural fields) is realised by building one environment per sampled field size
+    (see ``sample_field``); P7 (human-fair reflexes) lives in ``kilithattu_agents.human_fair``.
+    """
 
-    # Team configuration
-    num_crossers: int = 4
-    num_guards: int = 4  # Default: num_rows - 1
+    # field geometry (metres)
+    n_lanes: int = 2
+    n_rows: int = 5
+    n_crossers: int = 4
+    lane_w: float = 3.0
+    row_d: float = 3.0
+    zone: float = 2.0
+    # time
+    dt: float = 0.05
+    innings_s: float = 120.0
+    clap_auto_s: float = 2.0
+    # tagging and boundaries
+    r_tag: float = 0.5
+    side_tol: float = 0.1
+    # classic speeds (m/s)
+    v_cross: float = 5.0
+    v_guard: float = 3.0
+    v_kili: float = 3.6
+    # --- rule toggles ---
+    p1_momentum: bool = False  # acceleration limit, sprint / dash with stamina
+    p2_facing: bool = False  # facing, 180 degree tag cone, turning time
+    p3_vision: bool = False  # limited vision (fog of war) in observations
+    p4_clap: bool = False  # strategic clap window, false start = out
+    p6_calls: bool = False  # discrete team calls
+    # P1
+    walk_cross: float = 3.5
+    sprint_cross: float = 6.0
+    walk_guard: float = 3.5
+    dash_guard: float = 5.0
+    walk_kili: float = 4.0
+    dash_kili: float = 5.5
+    a_max: float = 20.0
+    stam_drain: float = 0.35
+    stam_regen: float = 0.20
+    stam_min: float = 0.10
+    # P2
+    t_turn: float = 0.30
+    # P3 (radius in metres)
+    vis_cross: float = 9.0
+    vis_guard: float = 9.0
+    vis_kili: float = 12.0
+    # P4
+    clap_min_s: float = 1.0
+    clap_max_s: float = 5.0
+    # P6
+    n_calls: int = 4
+    call_period: int = 10
 
-    # Time and limits
-    dt: float = 0.05  # 20 Hz
-    innings_duration: float = 120.0  # 2400 live ticks
-    r_tag: float = 0.6  # Tag reach radius in meters
-    clap_time: float = 2.0  # Automatic clap time in Classic (seconds)
-
-    # Classic speeds (m/s)
-    classic_crosser_speed: float = 5.0
-    classic_guard_speed: float = 4.2
-    classic_kili_speed: float = 4.8
-
-    # Kilithattu+ P1: Momentum & Stamina
-    p1_momentum_stamina: bool = False
-    crosser_walk_speed: float = 3.5
-    crosser_sprint_speed: float = 6.0
-    guard_walk_speed: float = 3.5
-    guard_dash_speed: float = 5.0
-    kili_walk_speed: float = 4.0
-    kili_dash_speed: float = 5.5
-    a_max: float = 20.0  # Maximum acceleration (m/s^2)
-    stamina_drain: float = 0.35  # Drain per second while sprinting/dashing
-    stamina_regen: float = 0.20  # Regen per second while walking/standing
-    sprint_stamina_threshold: float = 0.10  # Minimum stamina required to sprint
-
-    # Kilithattu+ P2: Facing & Turning
-    p2_facing_turning: bool = False
-    tag_cone_deg: float = 90.0  # Tag cone half-angle (+-90 degrees = 180 deg field)
-    turn_time: float = 0.30  # Duration in seconds to execute a 180 deg turn
-
-    # Kilithattu+ P3: Limited Vision (Fog of War)
-    p3_limited_vision: bool = False
-    crosser_fov_deg: float = 200.0
-    crosser_fov_radius: float = 9.0
-    guard_fov_deg: float = 180.0
-    guard_fov_radius: float = 9.0
-    kili_fov_deg: float = 360.0
-    kili_fov_radius: float = 12.0
-
-    # Kilithattu+ P4: Strategic Clap
-    p4_strategic_clap: bool = False
-    clap_window_min: float = 1.0
-    clap_window_max: float = 5.0
-
-    # Kilithattu+ P5: Procedural Fields
-    p5_procedural_fields: bool = False
-
-    # Kilithattu+ P6: Team Calls
-    p6_team_calls: bool = False
-    num_calls: int = 4
-    call_period_ticks: int = 10  # Every 0.5s
-
-    # Kilithattu+ P7: Human-Fair Reflexes
-    p7_human_fair: bool = False
-    obs_delay_ticks: int = 0
-    sticky_action_prob: float = 0.0
-
-    # Reward shaping
-    shaping_beta: float = (
-        0.0  # Potential-based shaping coefficient (0.0 in pure zero-sum evaluation)
-    )
+    # ---- derived quantities ----
+    @property
+    def field_w(self) -> float:
+        return self.n_lanes * self.lane_w
 
     @property
-    def field_width(self) -> float:
-        return self.num_lanes * self.lane_width
+    def field_l(self) -> float:
+        return self.n_rows * self.row_d
 
     @property
-    def field_length(self) -> float:
-        return self.num_rows * self.row_depth
+    def n_guards(self) -> int:
+        return self.n_rows - 1
+
+    @property
+    def n_defenders(self) -> int:
+        return self.n_guards + 1
+
+    @property
+    def n_agents(self) -> int:
+        return self.n_crossers + self.n_defenders
+
+    @property
+    def n_lines_t(self) -> int:  # transverse lines L0..Lnb
+        return self.n_rows + 1
+
+    @property
+    def K(self) -> int:  # lines per direction
+        return self.n_rows + 1
+
+    @property
+    def trip_points(self) -> int:  # 2K line points + 6 bonus  (= 18 by default)
+        return 2 * self.K + 6
 
     @property
     def max_ticks(self) -> int:
-        return int(self.innings_duration / self.dt)
+        return round(self.innings_s / self.dt)
+
+    @property
+    def clap_auto_ticks(self) -> int:
+        return round(self.clap_auto_s / self.dt)
+
+    @property
+    def clap_min_ticks(self) -> int:
+        return round(self.clap_min_s / self.dt)
+
+    @property
+    def clap_max_ticks(self) -> int:
+        return round(self.clap_max_s / self.dt)
+
+    @property
+    def v_max(self) -> float:
+        return max(self.v_cross, self.sprint_cross, self.dash_guard, self.dash_kili, self.v_guard, self.v_kili)
+
+    def replace(self, **kw: Any) -> EnvParams:
+        return dataclasses.replace(self, **kw)
 
 
-def load_env_params(path_or_dict: str | Path | dict[str, Any] | None = None) -> EnvParams:
-    """Load EnvParams from a YAML file, dictionary, or preset name."""
-    if path_or_dict is None:
-        return EnvParams()
-
-    if isinstance(path_or_dict, (str, Path)):
-        p = Path(path_or_dict)
-        if not p.exists():
-            # Check configs/rules/<name>.yaml
-            preset_path = Path("configs/rules") / f"{p.stem}.yaml"
-            if preset_path.exists():
-                p = preset_path
-            else:
-                raise FileNotFoundError(f"Config file not found: {path_or_dict}")
-        with open(p, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-    else:
-        data = dict(path_or_dict)
-
-    # Filter out metadata keys like 'name' or 'version'
-    valid_fields = {f for f in EnvParams.__dataclass_fields__}
-    filtered = {k: v for k, v in data.items() if k in valid_fields}
-    return EnvParams(**filtered)
+def rules_hash(p: EnvParams) -> str:
+    blob = json.dumps(dataclasses.asdict(p), sort_keys=True).encode()
+    return "sha256:" + hashlib.sha256(blob).hexdigest()[:16]
 
 
-def rules_hash(params: EnvParams) -> str:
-    """Compute a deterministic SHA-256 hash of the rule parameters."""
-    d = asdict(params)
-    serialized = json.dumps(d, sort_keys=True, default=str)
-    return f"sha256:{hashlib.sha256(serialized.encode('utf-8')).hexdigest()}"
+def _configs_dir() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "configs" / "rules").is_dir():
+            return parent / "configs" / "rules"
+    return here.parent / "presets"
+
+
+def load_params(source: str | Path | dict | None = None, **overrides: Any) -> EnvParams:
+    """Load parameters from a preset name (``classic``/``plus``), a YAML path, a dict, or defaults."""
+    data: dict[str, Any] = {}
+    if isinstance(source, dict):
+        data = dict(source)
+    elif source is not None:
+        path = Path(source)
+        if not path.exists():
+            path = _configs_dir() / f"{source}.yaml"
+        data = yaml.safe_load(path.read_text()) or {}
+    data.update(overrides)
+    valid = {f.name for f in dataclasses.fields(EnvParams)}
+    unknown = set(data) - valid
+    if unknown:
+        raise ValueError(f"unknown EnvParams keys: {sorted(unknown)}")
+    return EnvParams(**data)
+
+
+CLASSIC = EnvParams()
+PLUS = EnvParams(p1_momentum=True, p2_facing=True, p3_vision=False, p4_clap=True)
+
+
+def sample_field(rng, ranges: dict | None = None, base: EnvParams = CLASSIC) -> EnvParams:
+    """P5: sample a field configuration. Shapes are static per environment, so the trainer builds one
+    environment per sampled configuration and round-robins between them."""
+    r = {"n_lanes": (2, 3), "n_rows": (4, 9), "n_crossers": (3, 6)}
+    r.update(ranges or {})
+    pick = lambda lo_hi: int(rng.integers(lo_hi[0], lo_hi[1] + 1))
+    return base.replace(n_lanes=pick(r["n_lanes"]), n_rows=pick(r["n_rows"]), n_crossers=pick(r["n_crossers"]))

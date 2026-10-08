@@ -1,16 +1,5 @@
-"""Self-play league training components (§6.5)."""
+from .learners import Agent, League
+from .matchmaker import pfsp_weights, sample_opponent
+from .pool import LeaguePool, Snapshot
 
-from kilithattu_train.league.manager import LeagueManager, LearnerInfo
-from kilithattu_train.league.matchmaker import PFSPMatchmaker
-from kilithattu_train.league.payoff import LeaguePayoff, MatchupRecord
-from kilithattu_train.league.pool import SnapshotEntry, SnapshotPool
-
-__all__ = [
-    "LeagueManager",
-    "LearnerInfo",
-    "LeaguePayoff",
-    "MatchupRecord",
-    "PFSPMatchmaker",
-    "SnapshotEntry",
-    "SnapshotPool",
-]
+__all__ = ["Agent", "League", "LeaguePool", "Snapshot", "pfsp_weights", "sample_opponent"]

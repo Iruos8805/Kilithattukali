@@ -1,55 +1,51 @@
-"""Differential testing comparing vectorised JAX simulation against the Python reference engine."""
-
+"""JAX engine vs the plain-Python reference on random rollouts (Classic rules)."""
 import jax
 import jax.numpy as jnp
-from kilithattu_core.config import EnvParams
-from kilithattu_core.env import JointActions, KilithattuEnv
-from kilithattu_core.reference.reference_env import ReferenceKilithattuEnv
-from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS
+import numpy as np
+import pytest
+from conftest import get_env
+
+from kilithattu_core import CLASSIC, Actions, zeros_actions
+from kilithattu_core.reference import ReferenceEnv
 
 
-def test_differential_step_matching():
-    """Verify that pure-Python reference env and JAX env match on rollouts."""
-    params = EnvParams(clap_time=0.1)
-    jax_env = KilithattuEnv(params)
-    ref_env = ReferenceKilithattuEnv(params)
+def run(seed, n_ticks, bias):
+    env, step = get_env(CLASSIC)
+    key = jax.random.PRNGKey(seed)
+    _, s = env.reset(key)
+    ref = ReferenceEnv(CLASSIC)
+    ref.load(s)
+    rng = np.random.default_rng(seed)
+    counts = dict(tag=0, cross=0, deliv=0)
+    for t in range(n_ticks):
+        mv = np.zeros(CLASSIC.n_agents, np.int32)
+        mv[:4] = rng.choice([1, 1, 1, 2, 8, 3, 7, 5, 0], 4) if t < bias else rng.choice([5, 5, 5, 4, 6, 3, 7, 0], 4)
+        mv[4:8] = rng.integers(0, 3, 4)
+        mv[8] = rng.integers(0, 5)
+        a = zeros_actions(CLASSIC.n_agents).replace(move=jnp.asarray(mv))
+        # the engine masks invalid actions itself; give the reference the already-masked move
+        m = env.action_mask(s)
+        mv_m = np.where(np.asarray(jnp.take_along_axis(m.move, a.move[:, None], 1)[:, 0]), mv, 0)
+        _, s, r, d, ev = step(key, s, a)
+        ref.step(mv_m)
+        counts["tag"] += int(ev.tagged.sum()); counts["cross"] += int(ev.crossed.sum()); counts["deliv"] += int(ev.delivered.sum())
+        np.testing.assert_allclose(np.asarray(s.c_pos), ref.c_pos, atol=2e-4, err_msg=f"c_pos t={t}")
+        np.testing.assert_array_equal(np.asarray(s.c_status), ref.c_status, err_msg=f"status t={t}")
+        np.testing.assert_array_equal(np.asarray(s.c_kappa), ref.c_kappa, err_msg=f"kappa t={t}")
+        np.testing.assert_allclose(np.asarray(s.g_x), ref.g_x, atol=2e-4)
+        np.testing.assert_allclose(np.asarray(s.k_pos), ref.k_pos, atol=2e-4)
+        assert float(s.points) == pytest.approx(ref.points)
+    return counts
 
-    # Initial state
-    key = jax.random.PRNGKey(777)
-    obs, jax_state = jax_env.reset(key, params)
 
-    # Align initial positions exactly for 1:1 step tracking
-    # Set crosser 0 at (3.0, -1.0), Guard 0 at (3.0, 3.0), Kili at (3.0, 0.0)
-    jax_state = jax_state._replace(
-        crossers=jax_state.crossers._replace(
-            pos=jax_state.crossers.pos.at[0].set(jnp.array([3.0, -1.0]))
-        ),
-        guards=jax_state.guards._replace(x=jnp.full((MAX_GUARDS,), 0.5)),
-        kili=jax_state.kili._replace(pos=jnp.array([0.5, 0.0])),
-    )
-    ref_env.crossers[0].x = 3.0
-    ref_env.crossers[0].y = -1.0
-    for g in ref_env.guards:
-        g.x = 0.5
-    ref_env.kili.x = 0.5
-    ref_env.kili.y = 0.0
+@pytest.mark.parametrize("seed", range(12))
+def test_matches_reference(seed):
+    run(seed, 300, 150)
 
-    # Step both environments forward
-    for t in range(40):
-        # Move crosser 0 North (action 1)
-        c_actions = [0] * MAX_CROSSERS
-        c_actions[0] = 1
-        g_actions = [0] * MAX_GUARDS
 
-        joint_actions = JointActions.default()._replace(
-            crosser_move=jnp.array(c_actions, dtype=jnp.int32),
-            guard_move=jnp.array(g_actions, dtype=jnp.int32),
-        )
-
-        obs, jax_state, r_A, r_D, events = jax_env.step(key, jax_state, joint_actions, params)
-        ref_out = ref_env.step({"crosser_move": c_actions, "guard_move": g_actions})
-
-        # Compare attack score
-        assert int(jax_state.global_state.score_attack) == ref_out["score_attack"], (
-            f"Step {t}: score mismatch JAX {int(jax_state.global_state.score_attack)} != Ref {ref_out['score_attack']}"
-        )
+def test_scenarios_were_actually_exercised():
+    tot = dict(tag=0, cross=0, deliv=0)
+    for seed in range(100, 108):
+        c = run(seed, 300, 150)
+        for k in tot: tot[k] += c[k]
+    assert tot["tag"] > 0 and tot["cross"] > 0

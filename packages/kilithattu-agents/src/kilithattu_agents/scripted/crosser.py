@@ -1,95 +1,75 @@
-"""Scripted Crosser bot with gap finding, defender avoidance, and foul prevention."""
-
+"""Scripted crossers: stage near the next line, run to the side away from the guard, cross when the gap is
+large enough (patience shrinks with waiting), avoid fouls and the Kili."""
 from __future__ import annotations
 
-from typing import Any
+import jax
+import jax.numpy as jnp
 
-import numpy as np
-from chex import PRNGKey
-from kilithattu_core.env import Observations
-from kilithattu_core.spaces import MAX_CROSSERS, MAX_PLAYERS
+from kilithattu_core import Actions, EnvParams, Obs
 
-from kilithattu_agents.policy import Policy, PolicyInfo
+from ._common import to_move, unit, unpack
 
 
-class ScriptedCrosserPolicy(Policy):
-    """Heuristic crosser agent that seeks gaps across lines and returns home safely."""
+def init_carry(p: EnvParams, key, aggression: float):
+    nA = p.n_crossers
+    ag = aggression * jax.random.uniform(key, (nA,), minval=0.8, maxval=1.2)
+    side = jnp.where(jnp.arange(nA) % 2 == 0, -1.0, 1.0)
+    z = jnp.zeros((nA,))
+    return {"ag": ag, "w": z, "pin": z, "side": side, "kprev": jnp.zeros((nA,), jnp.int32), "commit": jnp.zeros((nA,), bool)}
 
-    def __init__(
-        self,
-        aggression: float = 0.7,
-        safety_margin: float = 0.8,
-    ) -> None:
-        self.aggression = aggression
-        self.safety_margin = safety_margin
 
-    def init_carry(self, num_agents: int) -> Any:
-        return None
-
-    def act(
-        self,
-        key: PRNGKey,
-        carry: Any,
-        obs: Observations,
-        agent_idx: int,
-        mask: Any = None,
-    ) -> tuple[dict[str, int], Any, PolicyInfo]:
-        # Ego player token
-        ego_tok = np.array(obs.player_tokens[agent_idx, agent_idx])
-        # Indices:
-        # 6..8: status (0=out, 1=pacha, 2=uppu)
-        is_out = ego_tok[6] > 0.5
-        is_pacha = ego_tok[7] > 0.5
-        is_uppu = ego_tok[8] > 0.5
-
-        if is_out:
-            return {"move": 0, "sprint": 0, "call": 0}, carry, PolicyInfo()
-
-        # Extract defender positions
-        defender_positions = []
-        for j in range(MAX_CROSSERS, MAX_PLAYERS):
-            if bool(obs.player_masks[j]):
-                tok = np.array(obs.player_tokens[agent_idx, j])
-                dx = tok[12] * 6.0
-                dy = tok[13] * 15.0
-                dist = np.sqrt(dx * dx + dy * dy)
-                defender_positions.append((dx, dy, dist, tok[14] * 6.0, tok[15] * 15.0))
-
-        # Decision logic
-        move_action = 0
-        sprint_action = 1 if self.aggression > 0.6 else 0
-
-        # Check nearest defender threat
-        threat = [d for d in defender_positions if d[2] < 2.0]
-
-        if is_pacha:
-            # Outbound: goal is to move North (+y)
-            if not threat:
-                # Clear path -> advance North
-                move_action = 1  # North
-            else:
-                # Threat nearby: evaluate horizontal gap
-                nearest_threat = min(threat, key=lambda x: x[2])
-                th_dx = nearest_threat[0]
-
-                if abs(th_dx) < self.safety_margin:
-                    # Defender directly ahead: feint or dodge sideways
-                    move_action = 3 if th_dx < 0 else 7  # Move away horizontally (East or West)
-                else:
-                    # Defender is offset: slip past in diagonal or straight North
-                    move_action = 1 if abs(th_dx) > self.safety_margin else (2 if th_dx < 0 else 8)
-
-        elif is_uppu:
-            # Inbound: goal is to return South (-y) to Home safe zone
-            if not threat:
-                move_action = 5  # South
-            else:
-                nearest_threat = min(threat, key=lambda x: x[2])
-                th_dx = nearest_threat[0]
-                if abs(th_dx) < self.safety_margin:
-                    move_action = 3 if th_dx < 0 else 7
-                else:
-                    move_action = 5  # Push South
-
-        action = {"move": move_action, "sprint": sprint_action, "call": 0}
-        return action, carry, PolicyInfo()
+def act(p: EnvParams, carry, obs: Obs, safety: float = 0.0) -> tuple[Actions, dict]:
+    nA, nG, K, dt = p.n_crossers, p.n_guards, p.K, p.dt
+    u = unpack(obs, p, 0)
+    c_pos, kappa, out = u["c_pos"], u["kappa"], u["out"]
+    x, y = c_pos[:, 0], c_pos[:, 1]
+    up = kappa < K
+    dirn = jnp.where(up, 1.0, -1.0)
+    li = jnp.where(up, kappa, 2 * K - 1 - kappa)
+    ly = li.astype(jnp.float32) * p.row_d
+    gap = (ly - y) * dirn
+    has_g = (li >= 1) & (li <= nG)
+    gx = jnp.where(has_g, u["g_x"][jnp.clip(li - 1, 0, nG - 1)], x)
+    row = jnp.where(up, li, li - 1)
+    inside = (y >= 0) & (y <= p.field_l) & ~out
+    orow = jnp.where(inside, jnp.clip(jnp.floor(y / p.row_d), 0, p.n_rows - 1).astype(jnp.int32), -99)
+    is_up = kappa >= K
+    opp = is_up[None, :] != is_up[:, None]
+    blocked = jnp.any((orow[None, :] == row[:, None]) & opp & ~jnp.eye(nA, dtype=bool), 1) & (row >= 0) & (row < p.n_rows)
+    kp = u["k_pos"]
+    stage_y = ly - dirn * 1.1
+    w = jnp.where(kappa != carry["kprev"], 0.0, carry["w"])
+    # patience: the longer a crosser waits, the smaller the clearance it demands from guard and Kili
+    safe_k = (jnp.abs(kp[0] - x) + jnp.abs(kp[1] - ly)) > jnp.maximum(1.2, 3.2 + safety - 0.6 * w)
+    approach = gap > 1.5
+    txa = jnp.clip(jnp.where(has_g, jnp.where(gx < x, p.field_w - 1.4, 1.4), x), 0.5, p.field_w - 0.5)
+    v_app = unit(txa - x, stage_y - y)
+    dx = jnp.abs(gx - x)
+    thr = jnp.maximum(0.9, 2.6 * carry["ag"] - 0.5 * w) + safety
+    staged = (gap >= 0.75) & (gap <= 1.5)
+    commit = carry["commit"] & (kappa == carry["kprev"]) & (gap > 0.0)  # keep running once decided
+    go_new = (~blocked) & safe_k & staged & ((~has_g) | (dx > thr))
+    go = commit | go_new
+    # teamwork: crossers heading for the same line take opposite sides so the guard cannot mirror both
+    idx = jnp.arange(nA)
+    mates = (li[None, :] == li[:, None]) & (up[None, :] == up[:, None]) & ~out[None, :] & (idx[None, :] != idx[:, None])
+    rank = jnp.sum(mates & (idx[None, :] < idx[:, None]), 1)
+    paired = jnp.any(mates, 1)
+    side_now = jnp.where(paired, jnp.where(rank % 2 == 0, -1.0, 1.0), carry["side"])
+    xs = jnp.where(side_now > 0, p.field_w - 0.7, 0.7)
+    pinned = (jnp.abs(x - xs) < 0.3) & (dx < thr) & ~go & ~approach
+    pin = jnp.where(pinned, carry["pin"] + dt, 0.0)
+    flip = pin > 0.45
+    side = jnp.where(flip, -side_now, side_now)
+    pin = jnp.where(flip, 0.0, pin)
+    w = jnp.where(go, 0.0, jnp.where((~blocked) & (~approach), w + dt, w))
+    lx = jnp.where((jnp.abs(xs - x) < 0.15) | blocked, 0.0, jnp.sign(xs - x))
+    ly2 = jnp.where(gap < 0.75, -dirn * 0.6, 0.0)  # back off only if too close to the line
+    v_stage = unit(lx, ly2)
+    v_go = jnp.stack([jnp.zeros_like(dirn), dirn], -1)
+    vec = jnp.where(go[:, None], v_go, jnp.where(approach[:, None], v_app, v_stage))
+    move = jnp.where(u["pre"] | out, 0, to_move(vec))
+    z = jnp.zeros((nA,), jnp.int32)
+    dash = (go & p.p1_momentum).astype(jnp.int32)
+    new_carry = {"ag": carry["ag"], "w": w, "pin": pin, "side": side, "kprev": kappa, "commit": go}
+    return Actions(move, dash, z, z, z), new_carry

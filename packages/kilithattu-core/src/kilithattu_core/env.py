@@ -1,276 +1,158 @@
-"""Main JaxMARL-style vectorisable environment for Kilithattu Kali."""
-
+"""The Kilithattu environment: a pure, jittable, vmappable function of (key, state, actions)."""
 from __future__ import annotations
-
-from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
-from chex import Array, PRNGKey
 
-from kilithattu_core.config import EnvParams
-from kilithattu_core.dynamics import (
-    update_crosser_dynamics,
-    update_guard_dynamics,
-    update_kili_dynamics,
-)
-from kilithattu_core.events import StepEvents
-from kilithattu_core.observe import (
-    build_global_token,
-    build_line_tokens,
-    observe_agent,
-)
-from kilithattu_core.rules import resolve_tick
-from kilithattu_core.spaces import MAX_CROSSERS, MAX_GUARDS, MAX_PLAYERS
-from kilithattu_core.state import (
-    STATUS_PACHA,
-    ZONE_HOME,
-    CrosserState,
-    EnvState,
-    GlobalState,
-    GuardState,
-    KiliState,
-)
-
-
-class JointActions(NamedTuple):
-    """Actions for all player slots in the game."""
-
-    # Crossers: move [MAX_CROSSERS], sprint [MAX_CROSSERS], call [MAX_CROSSERS]
-    crosser_move: Array
-    crosser_sprint: Array
-    crosser_call: Array
-
-    # Guards: move [MAX_GUARDS], dash [MAX_GUARDS], turn [MAX_GUARDS]
-    guard_move: Array
-    guard_dash: Array
-    guard_turn: Array
-
-    # Kili: move scalar, dash scalar, turn scalar, clap scalar
-    kili_move: Array
-    kili_dash: Array
-    kili_turn: Array
-    kili_clap: Array
-
-    @classmethod
-    def default(cls) -> JointActions:
-        return cls(
-            crosser_move=jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32),
-            crosser_sprint=jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32),
-            crosser_call=jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32),
-            guard_move=jnp.zeros((MAX_GUARDS,), dtype=jnp.int32),
-            guard_dash=jnp.zeros((MAX_GUARDS,), dtype=jnp.int32),
-            guard_turn=jnp.zeros((MAX_GUARDS,), dtype=jnp.int32),
-            kili_move=jnp.array(0, dtype=jnp.int32),
-            kili_dash=jnp.array(0, dtype=jnp.int32),
-            kili_turn=jnp.array(0, dtype=jnp.int32),
-            kili_clap=jnp.array(0, dtype=jnp.int32),
-        )
-
-
-class Observations(NamedTuple):
-    """Vectorised token sets and masks for all agents."""
-
-    player_tokens: Array  # [MAX_PLAYERS, MAX_PLAYERS, 27]
-    player_masks: Array  # [MAX_PLAYERS]
-    line_tokens: Array  # [MAX_LINES, 8]
-    line_mask: Array  # [MAX_LINES]
-    global_token: Array  # [20]
+from .config import EnvParams
+from .dynamics import crosser_move, guard_move, kili_move
+from .geometry import box_index, in_safe_zone
+from .observe import Observer
+from .rules import resolve_crossings, resolve_fouls, swept_hits
+from .state import Actions, ActionMask, CriticObs, EnvState, Events, Obs
 
 
 class KilithattuEnv:
-    """Pure JAX simulation of Kilithattu Kali."""
+    """Two-team zero-sum POSG. Agent order everywhere: crossers (attack), guards, Kili (defence).
 
-    def __init__(self, params: EnvParams | None = None) -> None:
-        self.params = params or EnvParams()
+    ``step`` returns ``(obs, state, rewards, done, events)`` with ``rewards = [r_attack, r_defence]`` and
+    ``r_defence = -r_attack`` (normalised so a full round trip is worth +1).
+    """
 
-    def reset(self, key: PRNGKey, params: EnvParams | None = None) -> tuple[Observations, EnvState]:
-        """Reset the environment to the initial state distribution rho_0 (§5.1)."""
-        p = params or self.params
-        k1, k2, k3 = jax.random.split(key, 3)
+    def __init__(self, params: EnvParams):
+        self.params = params
+        self.obs = Observer(params)
+        self.n_agents = params.n_agents
+        self.n_crossers = params.n_crossers
+        self.n_defenders = params.n_defenders
 
-        W = p.field_width
-        w = p.lane_width
-
-        # Active slot masks
-        crosser_active = jnp.arange(MAX_CROSSERS) < p.num_crossers
-        guard_active = jnp.arange(MAX_GUARDS) < p.num_guards
-
-        # 1. Crossers placed uniformly in home zone [0, W] x [-z, 0)
-        c_x = jax.random.uniform(k1, shape=(MAX_CROSSERS,), minval=0.5, maxval=W - 0.5)
-        c_y = jax.random.uniform(
-            k2, shape=(MAX_CROSSERS,), minval=-p.safe_zone_depth + 0.2, maxval=-0.2
+    # ---------------------------------------------------------------------------------------------------
+    def reset(self, key) -> tuple[Obs, EnvState]:
+        p = self.params
+        nA, nG = p.n_crossers, p.n_guards
+        k1, k2, k3, k4 = jax.random.split(key, 4)
+        base = (jnp.arange(nA) + 0.5) / nA * p.field_w
+        jitter = jax.random.uniform(k1, (nA,), minval=-0.3, maxval=0.3) * (p.field_w / nA)
+        cx = jnp.clip(base + jitter, 0.2, p.field_w - 0.2)
+        cy = -jax.random.uniform(k2, (nA,), minval=0.3, maxval=p.zone - 0.2)
+        gx = jax.random.uniform(k3, (nG,), minval=0.5, maxval=p.field_w - 0.5)
+        kx = jnp.clip(jnp.round(p.field_w / 2 / p.lane_w) * p.lane_w, 0.0, p.field_w)
+        s = EnvState(
+            c_pos=jnp.stack([cx, cy], -1), c_vel=jnp.zeros((nA, 2)), c_status=jnp.zeros((nA,), jnp.int32),
+            c_kappa=jnp.zeros((nA,), jnp.int32), c_trips=jnp.zeros((nA,), jnp.int32), c_stam=jnp.ones((nA,)),
+            c_box=-jnp.ones((nA,), jnp.int32), c_wait=jnp.zeros((nA,), jnp.int32),
+            g_x=gx, g_vx=jnp.zeros((nG,)), g_face=-jnp.ones((nG,)), g_turn=jnp.zeros((nG,)), g_stam=jnp.ones((nG,)),
+            k_pos=jnp.array([kx, 0.0]), k_face=-jnp.ones(()), k_turn=jnp.zeros(()), k_stam=jnp.ones(()),
+            tick=jnp.zeros((), jnp.int32), t=jnp.zeros((), jnp.int32), live=jnp.zeros((), bool),
+            done=jnp.zeros((), bool), points=jnp.zeros(()), deliveries=jnp.zeros((), jnp.int32),
+            last_call=jnp.zeros((2,), jnp.int32),
         )
-        c_pos = jnp.stack([c_x, c_y], axis=-1)
-        c_vel = jnp.zeros((MAX_CROSSERS, 2), dtype=jnp.float32)
-        c_facing = jnp.tile(jnp.array([0.0, 1.0]), (MAX_CROSSERS, 1))  # Facing North toward field
+        return self.obs.observe(s), s
 
-        init_crossers = CrosserState(
-            pos=c_pos,
-            vel=c_vel,
-            status=jnp.full((MAX_CROSSERS,), STATUS_PACHA, dtype=jnp.int32),
-            zone=jnp.full((MAX_CROSSERS,), ZONE_HOME, dtype=jnp.int32),
-            kappa=jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32),
-            trips=jnp.zeros((MAX_CROSSERS,), dtype=jnp.int32),
-            stamina=jnp.ones((MAX_CROSSERS,), dtype=jnp.float32),
-            facing=c_facing,
-            box=jnp.full((MAX_CROSSERS, 2), -1, dtype=jnp.int32),
-            prev_box=jnp.full((MAX_CROSSERS, 2), -1, dtype=jnp.int32),
-            entered_box_this_tick=jnp.zeros((MAX_CROSSERS,), dtype=jnp.bool_),
-            active_mask=crosser_active,
+    def observe(self, s: EnvState) -> Obs:
+        return self.obs.observe(s)
+
+    def critic_state(self, s: EnvState) -> CriticObs:
+        return self.obs.critic_obs(s)
+
+    def action_mask(self, s: EnvState) -> ActionMask:
+        return self.obs.masks(s)
+
+    def potential(self, s: EnvState):
+        """Shaping potential Phi(s) in [0,1]; exactly 0 in terminal states (policy-invariant shaping)."""
+        p = self.params
+        y = jnp.clip(s.c_pos[:, 1], 0.0, p.field_l)
+        prog = jnp.where(s.c_kappa < p.K, y, p.field_l + (p.field_l - y)) / (2 * p.field_l)
+        phi = jnp.where(s.c_status == 2, 0.0, prog).mean()
+        return jnp.where(s.done, 0.0, phi)
+
+    # ---------------------------------------------------------------------------------------------------
+    def _mask_actions(self, s: EnvState, a: Actions) -> Actions:
+        m = self.obs.masks(s)
+        ok = lambda mk, x: jnp.take_along_axis(mk, x[:, None], 1)[:, 0]
+        z = lambda mk, x: jnp.where(ok(mk, x), x, 0).astype(jnp.int32)
+        return Actions(z(m.move, a.move), z(m.dash, a.dash), z(m.turn, a.turn), z(m.clap, a.clap), z(m.call, a.call))
+
+    def step(self, key, s: EnvState, a: Actions):
+        p = self.params
+        nA, nG = p.n_crossers, p.n_guards
+        a = self._mask_actions(s, a)
+        c_act = jax.tree_util.tree_map(lambda x: x[:nA], a)
+        g_act = jax.tree_util.tree_map(lambda x: x[nA : nA + nG], a)
+        k_act = jax.tree_util.tree_map(lambda x: x[-1], a)
+        alive0 = s.c_status != 2
+
+        # 1. clap (Classic: automatic; P4: the Kili chooses inside a window, forced at its end)
+        if p.p4_clap:
+            clap_req = ((k_act.clap == 1) & (s.tick >= p.clap_min_ticks)) | (s.tick >= p.clap_max_ticks)
+        else:
+            clap_req = s.tick >= p.clap_auto_ticks
+        clap_now = (~s.live) & clap_req
+        live = s.live | clap_now
+
+        # 2. team calls (P6)
+        if p.p6_calls:
+            def team_call(calls):
+                return jnp.max(calls)
+            do_call = (s.tick % p.call_period) == 0
+            last_call = jnp.where(do_call, jnp.stack([team_call(a.call[:nA]), team_call(a.call[nA:])]), s.last_call)
+        else:
+            last_call = s.last_call
+
+        # 3. movement
+        c_pos, c_vel, c_stam = crosser_move(p, s.c_pos, s.c_vel, s.c_stam, c_act.move, c_act.dash, alive0, live)
+        g_x, g_vx, g_stam, g_face, g_turn = guard_move(p, s.g_x, s.g_vx, s.g_stam, g_act.move, g_act.dash, s.g_face, s.g_turn, g_act.turn)
+        k_pos, k_stam, k_face, k_turn = kili_move(p, s.k_pos, s.k_stam, k_act.move, k_act.dash, s.k_face, s.k_turn, k_act.turn)
+
+        # 4. constraints: side exit, false start (P4)
+        in_field = (c_pos[:, 1] >= 0) & (c_pos[:, 1] <= p.field_l)
+        side = alive0 & in_field & ((c_pos[:, 0] < -p.side_tol) | (c_pos[:, 0] > p.field_w + p.side_tol))
+        false_start = alive0 & (c_pos[:, 1] >= 0) & (~live) if p.p4_clap else jnp.zeros((nA,), bool)
+
+        # 5. swept tags (resolved before crossings)
+        gy = self.obs.guard_y
+        d0 = jnp.concatenate([jnp.stack([s.g_x, gy], -1), s.k_pos[None]], 0)
+        d1 = jnp.concatenate([jnp.stack([g_x, gy], -1), k_pos[None]], 0)
+        hit = swept_hits(s.c_pos, c_pos, d0, d1, p.r_tag)
+        if p2 := p.p2_facing:
+            face = jnp.concatenate([g_face, k_face[None]])
+            turning = jnp.concatenate([g_turn > 0, (k_turn > 0)[None]])
+            cone = (c_pos[:, None, 1] - d1[None, :, 1]) * face[None, :] >= 0
+            hit = hit & cone & (~turning)[None, :]
+        tagged = alive0 & ~in_safe_zone(p, c_pos) & jnp.any(hit, axis=1)
+        out1 = tagged | side | false_start
+        alive1 = alive0 & ~out1
+
+        # 6. line crossings for survivors
+        kappa, status, adv, delivered = resolve_crossings(p, s.c_kappa, s.c_pos[:, 1], c_pos[:, 1], alive1)
+        status = jnp.where(out1 | ~alive0, 2, status)
+
+        # 7. fouls
+        box = box_index(p, c_pos)
+        fouled = resolve_fouls(status, box, s.c_box, status != 2)
+        status = jnp.where(fouled, 2, status)
+        alive2 = status != 2
+
+        # 8. bookkeeping, reward, termination
+        line_pts = adv.sum()
+        deliv = delivered.sum()
+        delta = (line_pts + 6 * deliv).astype(jnp.float32)
+        r_att = delta / p.trip_points
+        t = s.t + s.live.astype(jnp.int32)
+        wait = jnp.where(adv | ~alive2, 0, s.c_wait + s.live.astype(jnp.int32))
+        done = (~jnp.any(alive2)) | (t >= p.max_ticks)
+        ns = EnvState(
+            c_pos=c_pos, c_vel=c_vel, c_status=status, c_kappa=kappa, c_trips=s.c_trips + delivered.astype(jnp.int32),
+            c_stam=c_stam, c_box=jnp.where(alive2, box, -1), c_wait=wait,
+            g_x=g_x, g_vx=g_vx, g_face=g_face, g_turn=g_turn, g_stam=g_stam,
+            k_pos=k_pos, k_face=k_face, k_turn=k_turn, k_stam=k_stam,
+            tick=s.tick + 1, t=t, live=live, done=done, points=s.points + delta, deliveries=s.deliveries + deliv,
+            last_call=last_call,
         )
-
-        # 2. Guards placed on transverse lines L1..L_nB-1 at random x in [0, W]
-        g_x = jax.random.uniform(k3, shape=(MAX_GUARDS,), minval=0.5, maxval=W - 0.5)
-        g_lines = jnp.arange(1, MAX_GUARDS + 1, dtype=jnp.int32)
-        init_guards = GuardState(
-            x=g_x,
-            vx=jnp.zeros((MAX_GUARDS,), dtype=jnp.float32),
-            line_idx=g_lines,
-            facing=jnp.zeros((MAX_GUARDS,), dtype=jnp.int32),  # Facing Home (South)
-            turn_timer=jnp.zeros((MAX_GUARDS,), dtype=jnp.float32),
-            stamina=jnp.ones((MAX_GUARDS,), dtype=jnp.float32),
-            active_mask=guard_active,
-        )
-
-        # 3. Kili starts at centre junction of line L0 (W/2, 0)
-        centre_junc_x = (float(p.num_lanes // 2)) * w
-        init_kili = KiliState(
-            pos=jnp.array([centre_junc_x, 0.0], dtype=jnp.float32),
-            vel=jnp.zeros((2,), dtype=jnp.float32),
-            facing=jnp.array(0, dtype=jnp.int32),  # South
-            turn_timer=jnp.array(0.0, dtype=jnp.float32),
-            stamina=jnp.array(1.0, dtype=jnp.float32),
-            current_line_type=jnp.array(0, dtype=jnp.int32),  # Transverse
-            current_line_idx=jnp.array(0, dtype=jnp.int32),  # Line L0
-        )
-
-        # 4. Global state
-        init_global = GlobalState(
-            tick=jnp.array(0, dtype=jnp.int32),
-            time_elapsed=jnp.array(0.0, dtype=jnp.float32),
-            pre_clap_timer=jnp.array(0.0, dtype=jnp.float32),
-            clapped=jnp.array(False, dtype=jnp.bool_),
-            score_attack=jnp.array(0, dtype=jnp.int32),
-            score_defence=jnp.array(0, dtype=jnp.int32),
-            innings_idx=jnp.array(0, dtype=jnp.int32),
-            done=jnp.array(False, dtype=jnp.bool_),
-            last_call_attack=jnp.array(0, dtype=jnp.int32),
-            last_call_defence=jnp.array(0, dtype=jnp.int32),
-        )
-
-        state = EnvState(
-            crossers=init_crossers,
-            guards=init_guards,
-            kili=init_kili,
-            global_state=init_global,
-            rng_key=key,
-        )
-
-        obs = self.get_observations(state, p)
-        return obs, state
-
-    def step(
-        self,
-        key: PRNGKey,
-        state: EnvState,
-        actions: JointActions,
-        params: EnvParams | None = None,
-    ) -> tuple[Observations, EnvState, Array, Array, StepEvents]:
-        """Step the environment forward by dt (20 Hz) given joint actions."""
-        p = params or self.params
-
-        # 1. Update candidate dynamics
-        cand_c_pos, cand_c_vel, cand_c_stamina, cand_c_facing = update_crosser_dynamics(
-            state.crossers, actions.crosser_move, actions.crosser_sprint, p
-        )
-
-        cand_g_x, cand_g_vx, cand_g_facing, cand_g_turn_timer, cand_g_stamina = (
-            update_guard_dynamics(
-                state.guards, actions.guard_move, actions.guard_dash, actions.guard_turn, p
-            )
-        )
-
-        (
-            cand_k_pos,
-            cand_k_vel,
-            cand_k_facing,
-            cand_k_turn_timer,
-            cand_k_stamina,
-            cand_k_line_type,
-            cand_k_line_idx,
-        ) = update_kili_dynamics(
-            state.kili, actions.kili_move, actions.kili_dash, actions.kili_turn, p
-        )
-
-        # 2. Resolve tick rules
-        attack_call = actions.crosser_call[0]
-        defence_call = jnp.array(0, dtype=jnp.int32)
-
-        new_state, events, r_A, r_D = resolve_tick(
-            state=state,
-            cand_crosser_pos=cand_c_pos,
-            cand_crosser_vel=cand_c_vel,
-            cand_crosser_stamina=cand_c_stamina,
-            cand_crosser_facing=cand_c_facing,
-            cand_guard_x=cand_g_x,
-            cand_guard_vx=cand_g_vx,
-            cand_guard_facing=cand_g_facing,
-            cand_guard_turn_timer=cand_g_turn_timer,
-            cand_guard_stamina=cand_g_stamina,
-            cand_kili_pos=cand_k_pos,
-            cand_kili_vel=cand_k_vel,
-            cand_kili_facing=cand_k_facing,
-            cand_kili_turn_timer=cand_k_turn_timer,
-            cand_kili_stamina=cand_k_stamina,
-            cand_kili_line_type=cand_k_line_type,
-            cand_kili_line_idx=cand_k_line_idx,
-            kili_clap_action=actions.kili_clap,
-            attack_call=attack_call,
-            defence_call=defence_call,
-            params=p,
-        )
-
-        obs = self.get_observations(new_state, p)
-        return obs, new_state, r_A, r_D, events
-
-    def get_observations(self, state: EnvState, params: EnvParams) -> Observations:
-        """Compute all player observations and tokens."""
-        # Tokens from perspective of each player slot
-        all_tokens = jax.vmap(lambda i: observe_agent(i, state, params, is_critic=False)[0])(
-            jnp.arange(MAX_PLAYERS)
-        )
-        _, player_masks = observe_agent(0, state, params)
-        line_tokens, line_mask = build_line_tokens(params)
-        global_tok = build_global_token(state, params)
-
-        return Observations(
-            player_tokens=all_tokens,
-            player_masks=player_masks,
-            line_tokens=line_tokens,
-            line_mask=line_mask,
-            global_token=global_tok,
-        )
-
-    def critic_state(self, state: EnvState, params: EnvParams | None = None) -> Observations:
-        """Centralised critic view: full state, no fog, all stamina visible."""
-        p = params or self.params
-        all_tokens = jax.vmap(lambda i: observe_agent(i, state, p, is_critic=True)[0])(
-            jnp.arange(MAX_PLAYERS)
-        )
-        _, player_masks = observe_agent(0, state, p)
-        line_tokens, line_mask = build_line_tokens(p)
-        global_tok = build_global_token(state, p)
-
-        return Observations(
-            player_tokens=all_tokens,
-            player_masks=player_masks,
-            line_tokens=line_tokens,
-            line_mask=line_mask,
-            global_token=global_tok,
-        )
+        ev = Events(tagged=tagged, fouled=fouled, side_exit=side, false_start=false_start, crossed=adv, delivered=delivered, clapped=clap_now)
+        rewards = jnp.stack([r_att, -r_att])
+        return self.obs.observe(ns), ns, rewards, done, ev
 
 
 def make_env(params: EnvParams | None = None) -> KilithattuEnv:
-    """Factory function for creating a KilithattuEnv instance."""
-    return KilithattuEnv(params=params)
+    return KilithattuEnv(params or EnvParams())

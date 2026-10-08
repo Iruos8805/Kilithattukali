@@ -1,13 +1,6 @@
-# Experiment E6: Human Teaming and Fictitious Co-Play
+# E6 RQ6 FCP vs self-play teammates
 
-## Objective
-Answer **RQ6**: Does training with a diverse partner distribution (FCP) yield policies that coordinate better with unseen partners and human players than naive self-play?
+Config: `configs/eval/e6_human_teaming.yaml`
 
-## Key Metrics
-- **Cross-Play Team Score**: Points achieved when paired with held-out, non-standard teammate behaviors.
-- **Hypothesis**: FCP policies exhibit significantly higher zero-shot coordination resilience than pure self-play agents.
-
-## Running
-```bash
-uv run python experiments/e6_human_teaming/run_e6.py --innings 10 --seed 42
-```
+Run: see `run.sh`. Results go to `runs/`; figures to `docs/figures/`.
+Status: configuration and entry-point command only; the analysis scripts for this experiment are not written yet.

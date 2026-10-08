@@ -1,23 +1,16 @@
-[project]
-name = "kilithattu-eval"
-version = "0.1.0"
-description = "Evaluation, tournaments, Elo, Nash averaging, and game balancing for Kilithattu Kali"
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-    "kilithattu-core",
-    "kilithattu-agents",
-    "kilithattu-train",
-    "pandas>=2.0.0",
-    "matplotlib>=3.8.0",
-]
-
-[project.scripts]
-kilithattu-eval = "kilithattu_eval.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project]
+name = "kilithattu-eval"
+version = "0.1.0"
+description = "Matches, ratings, exploitability, balance search and experiment tooling"
+requires-python = ">=3.11"
+dependencies = ["kilithattu-train", "kilithattu-agents", "kilithattu-core", "optuna", "pandas", "matplotlib", "scipy"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/kilithattu_eval"]
+
+[project.scripts]
+kilithattu-eval = "kilithattu_eval.cli:main"

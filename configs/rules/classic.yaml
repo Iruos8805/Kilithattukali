@@ -1,34 +1,20 @@
-# Classic Kilithattu Kali Rules Preset
-name: classic
-version: "1.0.0"
-
-# Field geometry
-num_lanes: 2
-num_rows: 5
-lane_width: 3.0
-row_depth: 3.0
-safe_zone_depth: 2.0
-
-# Team counts
-num_crossers: 4
-num_guards: 4
-
-# Physics and rules
+# Classic rules (balance v1, see RULES.md section 9): v_guard 3.0, v_kili 3.6, r_tag 0.5 were swept with the
+# scripted bots so that scripted attack vs scripted defence is competitive. All Kilithattu+ toggles off.
+n_lanes: 2
+n_rows: 5
+n_crossers: 4
+lane_w: 3.0
+row_d: 3.0
+zone: 2.0
 dt: 0.05
-innings_duration: 120.0
-r_tag: 0.6
-clap_time: 2.0
-
-# Speeds
-crosser_speed: 5.0
-guard_speed: 4.2
-kili_speed: 4.8
-
-# Plus toggles (all disabled in classic)
-p1_momentum_stamina: false
-p2_facing_turning: false
-p3_limited_vision: false
-p4_strategic_clap: false
-p5_procedural_fields: false
-p6_team_calls: false
-p7_human_fair: false
+innings_s: 120.0
+clap_auto_s: 2.0
+r_tag: 0.5
+v_cross: 5.0
+v_guard: 3.0
+v_kili: 3.6
+p1_momentum: false
+p2_facing: false
+p3_vision: false
+p4_clap: false
+p6_calls: false

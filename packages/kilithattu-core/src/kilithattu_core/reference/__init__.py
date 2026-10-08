@@ -1,5 +1,4 @@
-"""Reference implementation of Kilithattu Kali rules."""
+"""Slow, plain-Python/NumPy reference implementation of the Classic rules (tests only)."""
+from .ref_env import ReferenceEnv
 
-from kilithattu_core.reference.reference_env import ReferenceKilithattuEnv
-
-__all__ = ["ReferenceKilithattuEnv"]
+__all__ = ["ReferenceEnv"]
