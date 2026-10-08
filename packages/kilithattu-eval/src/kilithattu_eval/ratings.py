@@ -1,43 +1,33 @@
-"""Elo rating system and Nash averaging for match outcomes."""
-
+"""Elo and Nash averaging for a population of agents from a pairwise score matrix."""
 from __future__ import annotations
 
 import numpy as np
+from scipy.optimize import linprog
 
 
-class EloTracker:
-    """Standard Elo rating tracker for team-vs-team matches."""
-
-    def __init__(self, k_factor: float = 32.0, default_rating: float = 1000.0) -> None:
-        self.k_factor = k_factor
-        self.default_rating = default_rating
-        self.ratings: dict[str, float] = {}
-
-    def get_rating(self, player_id: str) -> float:
-        return self.ratings.get(player_id, self.default_rating)
-
-    def expected_score(self, rating_a: float, rating_b: float) -> float:
-        return 1.0 / (1.0 + 10.0 ** ((rating_b - rating_a) / 400.0))
-
-    def record_match(self, player_a: str, player_b: str, score_a: float) -> tuple[float, float]:
-        """Record match result (score_a: 1.0 = A wins, 0.5 = draw, 0.0 = B wins)."""
-        r_a = self.get_rating(player_a)
-        r_b = self.get_rating(player_b)
-
-        exp_a = self.expected_score(r_a, r_b)
-        exp_b = 1.0 - exp_a
-        score_b = 1.0 - score_a
-
-        new_r_a = r_a + self.k_factor * (score_a - exp_a)
-        new_r_b = r_b + self.k_factor * (score_b - exp_b)
-
-        self.ratings[player_a] = new_r_a
-        self.ratings[player_b] = new_r_b
-        return new_r_a, new_r_b
+def elo_from_matrix(score: np.ndarray, iters: int = 400, k: float = 16.0) -> np.ndarray:
+    """score[i, j] in [-1, 1] (positive: i beats j). Returns Elo ratings centred on 1000."""
+    n = score.shape[0]
+    r = np.full(n, 1000.0)
+    prob = (np.clip(score, -1, 1) + 1) / 2  # observed win expectation
+    for _ in range(iters):
+        exp = 1 / (1 + 10 ** ((r[None, :] - r[:, None]) / 400))
+        g = ((prob - exp) * ~np.eye(n, dtype=bool)).sum(1)
+        r += k * g / max(n - 1, 1)
+    return r - r.mean() + 1000.0
 
 
-def compute_nash_averaging(payoff_matrix: np.ndarray) -> np.ndarray:
-    """Compute maximum entropy Nash equilibrium / row player distribution for a zero-sum game."""
-    n = payoff_matrix.shape[0]
-    # Uniform baseline as default
-    return np.full((n,), 1.0 / n)
+def nash_average(score: np.ndarray):
+    """Maximum-entropy-free Nash of the antisymmetric zero-sum game ``score`` via LP.
+
+    Returns (mixture over agents, game value, nash-averaged payoff of each agent against the mixture).
+    """
+    n = score.shape[0]
+    A = np.asarray(score, float)
+    # maximise v s.t. sum_i x_i A[i, j] >= v for all j, x in simplex
+    c = np.zeros(n + 1); c[-1] = -1
+    A_ub = np.hstack([-A.T, np.ones((n, 1))])
+    res = linprog(c, A_ub=A_ub, b_ub=np.zeros(n), A_eq=[np.r_[np.ones(n), 0]], b_eq=[1], bounds=[(0, 1)] * n + [(None, None)])
+    x = np.clip(res.x[:n], 0, None)
+    x = x / x.sum()
+    return x, float(res.x[-1]), A @ x

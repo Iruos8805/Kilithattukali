@@ -1,103 +1,67 @@
-"""Fictitious Co-Play (FCP) partner pool for human-compatible teammate training (§6.6)."""
+"""Fictitious Co-Play (FCP): a diverse partner pool, then a learner trained with randomly sampled partners.
 
+Stage 1 trains ``fcp_partners`` attack policies against the scripted defence with different seeds, entropy
+scales and shaping weights, saving an early and a final checkpoint of each. Stage 2 trains one crosser slot
+while the other crossers are played by frozen partners sampled each phase (the loss only uses the learner
+slot). The result generalises to teammates it never trained with, which is what human-AI teaming needs.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+import copy
+from dataclasses import replace
 
+import jax
 import numpy as np
-from kilithattu_agents.human_fair import HumanFairPolicyWrapper
-from kilithattu_agents.policy import Policy
-from kilithattu_agents.scripted.crosser import ScriptedCrosserPolicy
-from kilithattu_agents.scripted.guard import ScriptedGuardPolicy
-from kilithattu_agents.scripted.kili import ScriptedKiliPolicy
+
+from kilithattu_agents import save_checkpoint
+from kilithattu_core import EnvParams, make_env
+
+from .config import TrainConfig
+from .curriculum import make_ctrl
+from .mappo import Trainer, run_updates
 
 
-@dataclass
-class PartnerEntry:
-    id: str
-    role: str  # "crosser" | "guard" | "kili"
-    policy: Policy
-    description: str = ""
+def train_partner_pool(cfg: TrainConfig, p: EnvParams, defence: str = "scripted:guard?reaction=0.3", logger=None, init=None):
+    """-> list of actor-parameter pytrees (early + final checkpoint per partner)."""
+    net = cfg.net.build()
+    pool = []
+    for i in range(cfg.fcp_partners):
+        ppo = copy.deepcopy(cfg.ppo)
+        ppo.ent_start *= float(np.random.default_rng(cfg.seed + i).uniform(0.5, 2.0))
+        ppo.shaping_beta = float(np.random.default_rng(cfg.seed + 100 + i).uniform(0.0, 0.4))
+        tr = Trainer(make_env(p), net, ppo, make_ctrl("learn", "attack", p), make_ctrl(defence, "defence", p))
+        ts = tr.init(jax.random.PRNGKey(cfg.seed * 1000 + i), params_a=init)
+        half = max(1, cfg.fcp_partner_updates // 2)
+        ts, _ = run_updates(tr, ts, half, cfg.fcp_partner_updates, log=None, log_every=half)
+        pool.append(ts.params["a"]["actor"])
+        ts, _ = run_updates(tr, ts, cfg.fcp_partner_updates - half, cfg.fcp_partner_updates, start=half, log=None, log_every=cfg.fcp_partner_updates)
+        pool.append(ts.params["a"]["actor"])
+        if logger:
+            logger(i + 1, {"fcp/partner": i}, tag="fcp")
+    return pool
 
 
-class FCPPartnerPool:
-    """Maintains a diverse pool of partner policies for training human-compatible teammates (§6.6).
-
-    Includes:
-    - Scripted bots with randomised aggression, safety margins, and reaction delays.
-    - Snapshot checkpoints from training.
-    - Human-fair observation delays and sticky actions.
-    """
-
-    def __init__(self, rng: np.random.Generator | None = None) -> None:
-        self.rng = rng or np.random.default_rng()
-        self.partners: dict[str, PartnerEntry] = {}
-        self._populate_default_scripted_partners()
-
-    def _populate_default_scripted_partners(self) -> None:
-        """Seed the pool with diverse scripted baselines (cautious, aggressive, delayed)."""
-        # Crosser variants
-        for agg in [0.2, 0.4, 0.6, 0.8, 1.0]:
-            p = ScriptedCrosserPolicy(aggression=agg, safety_margin=0.8 + agg * 0.4)
-            wrapped = HumanFairPolicyWrapper(
-                p, obs_delay_ticks=int(agg * 4), sticky_action_prob=0.05
-            )
-            self.add_partner(
-                partner_id=f"scripted_crosser_agg_{agg:.1f}",
-                role="crosser",
-                policy=wrapped,
-                description=f"Scripted crosser with aggression={agg:.1f}",
-            )
-
-        # Guard variants
-        for ant in [0.2, 0.5, 0.8]:
-            p = ScriptedGuardPolicy(anticipation=ant)
-            self.add_partner(
-                partner_id=f"scripted_guard_ant_{ant:.1f}",
-                role="guard",
-                policy=p,
-                description=f"Scripted guard with anticipation={ant:.1f}",
-            )
-
-        # Kili variants
-        p_kili = ScriptedKiliPolicy()
-        self.add_partner(
-            partner_id="scripted_kili",
-            role="kili",
-            policy=p_kili,
-            description="Scripted Kili with graph navigation and clap",
-        )
-
-    def add_partner(
-        self, partner_id: str, role: str, policy: Policy, description: str = ""
-    ) -> None:
-        self.partners[partner_id] = PartnerEntry(
-            id=partner_id, role=role, policy=policy, description=description
-        )
-
-    def sample_partner(self, role: str) -> Policy:
-        """Randomly sample a partner policy for the requested role."""
-        candidates = [p for p in self.partners.values() if p.role == role]
-        if not candidates:
-            raise ValueError(f"No partners available for role '{role}'")
-        choice = self.rng.choice(candidates)
-        return choice.policy
-
-    def sample_crosser_slots(
-        self, num_crossers: int, num_learner_slots: int = 2
-    ) -> dict[int, str | Policy]:
-        """Sample assignment of crosser slots between learner and partner pool.
-
-        Returns a dictionary mapping slot_idx -> 'learner' or sampled Policy.
-        """
-        all_slots = list(range(num_crossers))
-        self.rng.shuffle(all_slots)
-        learner_indices = set(all_slots[:num_learner_slots])
-
-        assignment: dict[int, str | Policy] = {}
-        for idx in range(num_crossers):
-            if idx in learner_indices:
-                assignment[idx] = "learner"
-            else:
-                assignment[idx] = self.sample_partner("crosser")
-        return assignment
+def train_fcp(cfg: TrainConfig, p: EnvParams, partners: list, defence: str = "scripted:guard?reaction=0.3", logger=None, params_a=None, phases: int | None = None):
+    """Train the learner (crosser slot 0) with sampled partners. Returns the learner params."""
+    net = cfg.net.build()
+    mask = np.array([False] + [True] * (p.n_crossers - 1))
+    tr = Trainer(make_env(p), net, cfg.ppo, make_ctrl("learn", "attack", p), make_ctrl(defence, "defence", p), partner_mask=mask)
+    rng = np.random.default_rng(cfg.seed)
+    key = jax.random.PRNGKey(cfg.seed + 7)
+    phases = phases or max(1, cfg.fcp_updates // 10)
+    per = max(1, cfg.fcp_updates // phases)
+    ts = None
+    learner = params_a
+    for ph in range(phases):
+        partner = partners[int(rng.integers(len(partners)))]
+        key, k = jax.random.split(key)
+        ts = tr.init(k, params_a=learner, partner=partner)
+        if learner is None:
+            learner = ts.params["a"]
+        ts, m = run_updates(tr, ts, per, cfg.fcp_updates, start=ph * per, log=None, log_every=per)
+        learner = ts.params["a"]
+        if logger:
+            logger((ph + 1) * per, {**m, "fcp/phase": ph}, tag="fcp")
+    if logger:
+        save_checkpoint(logger.dir / "attack" / "fcp", learner["actor"], p, net, "attack", cfg.run_id, cfg.fcp_updates, critic_params=learner["critic"])
+    return learner

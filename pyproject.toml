@@ -1,34 +1,20 @@
 [project]
 name = "kilithattu-workspace"
 version = "0.1.0"
-description = "Kilithattu-RL: Multi-Agent RL and Playable Game for Kerala's Traditional Onam Game"
-readme = "README.md"
+description = "Kilithattu-RL: multi-agent RL and a playable game for Kilithattu Kali"
 requires-python = ">=3.11"
-dependencies = [
-    "kilithattu-core",
-    "kilithattu-agents",
-    "kilithattu-train",
-    "kilithattu-eval",
-    "kilithattu-game",
-]
+readme = "README.md"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+cuda = ["jax[cuda12]"]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=5.0.0",
-    "hypothesis>=6.100.0",
-    "import-linter>=2.0",
-    "ruff>=0.6.0",
-]
+dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5", "pyright>=1.1.370", "import-linter>=2.0", "pre-commit>=3.7"]
 
 [tool.uv.workspace]
-members = [
-    "packages/kilithattu-core",
-    "packages/kilithattu-agents",
-    "packages/kilithattu-train",
-    "packages/kilithattu-eval",
-    "packages/kilithattu-game",
-]
+members = ["packages/*"]
 
 [tool.uv.sources]
 kilithattu-core = { workspace = true }
@@ -38,27 +24,22 @@ kilithattu-eval = { workspace = true }
 kilithattu-game = { workspace = true }
 
 [tool.ruff]
-line-length = 100
-target-version = "py312"
+line-length = 110
+target-version = "py311"
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
-ignore = ["E501"]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E741", "E501", "B905"]
 
 [tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q"
-testpaths = [
-    "packages/kilithattu-core/tests",
-    "packages/kilithattu-agents/tests",
-    "packages/kilithattu-train/tests",
-    "packages/kilithattu-eval/tests",
-    "packages/kilithattu-game/tests",
-]
-pythonpath = [
-    "packages/kilithattu-core/src",
-    "packages/kilithattu-agents/src",
-    "packages/kilithattu-train/src",
-    "packages/kilithattu-eval/src",
-    "packages/kilithattu-game/src",
-]
+testpaths = ["packages"]
+addopts = "-q"
+markers = ["nightly: slow tests run only in the nightly workflow"]
+
+[tool.pyright]
+include = ["packages"]
+typeCheckingMode = "basic"
+reportMissingImports = false
+reportMissingModuleSource = false
+reportAttributeAccessIssue = false

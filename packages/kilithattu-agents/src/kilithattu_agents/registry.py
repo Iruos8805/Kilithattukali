@@ -1,82 +1,60 @@
-"""Policy registry and resolution for scripted and learned agents."""
-
+"""Resolve policy references such as ``main@hard``, ``run:<id>/step:<n>``, ``scripted:guard?reaction=0.5``."""
 from __future__ import annotations
 
-from kilithattu_agents.human_fair import HumanFairPolicyWrapper
-from kilithattu_agents.learned import LearnedPolicy
-from kilithattu_agents.policy import Policy
-from kilithattu_agents.scripted.crosser import ScriptedCrosserPolicy
-from kilithattu_agents.scripted.guard import ScriptedGuardPolicy
-from kilithattu_agents.scripted.kili import ScriptedKiliPolicy
+from pathlib import Path
+from urllib.parse import parse_qs
+
+import yaml
+
+from kilithattu_core import EnvParams
+
+from .checkpoint import load_checkpoint
+from .policy import NetworkPolicy
+from .scripted import ScriptedAttack, ScriptedDefence
 
 
-def load_policy(ref: str) -> Policy:
-    """Resolve a policy reference string to an instantiated Policy.
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "configs" / "game").is_dir():
+            return parent
+    return Path.cwd()
 
-    Examples:
-        - "scripted:crosser"
-        - "scripted:guard"
-        - "scripted:kili"
-        - "learned:crosser"
-        - "checkpoint:checkpoints/stage_S0"
-        - "main@easy"
-        - "main@medium"
-        - "main@hard"
-    """
-    clean_ref = ref.strip().lower()
 
-    if clean_ref.startswith("checkpoint:"):
-        path = ref.split("checkpoint:", 1)[1]
-        return LearnedPolicy.from_checkpoint(path)
+def load_ladder(path: str | Path | None = None) -> dict:
+    path = Path(path) if path else _repo_root() / "configs" / "game" / "ladder.yaml"
+    return yaml.safe_load(path.read_text())
 
-    if clean_ref.startswith("learned:") or clean_ref == "learned":
-        from pathlib import Path
-        for candidate in ["checkpoints/stage_S0", "checkpoints/best", "checkpoints/latest"]:
-            if (Path(candidate) / "model.pkl").exists() or (Path(candidate) / "model.msgpack").exists():
-                return LearnedPolicy.from_checkpoint(candidate)
-        # If no checkpoint exists on disk yet, initialize initialized actor-critic
-        import jax
-        import jax.numpy as jnp
-        from kilithattu_agents.networks import KilithattuActorCritic
-        from kilithattu_core.spaces import MAX_PLAYERS, MAX_LINES
 
-        model = KilithattuActorCritic(d_model=64, rnn_dim=128)
-        key = jax.random.PRNGKey(42)
-        p_tok = jnp.zeros((1, MAX_PLAYERS, 27))
-        l_tok = jnp.zeros((1, MAX_LINES, 8))
-        g_tok = jnp.zeros((1, 20))
-        p_mask = jnp.ones((1, MAX_PLAYERS), dtype=jnp.bool_)
-        l_mask = jnp.ones((1, MAX_LINES), dtype=jnp.bool_)
-        params = model.init(key, p_tok, l_tok, g_tok, p_mask, l_mask, ego_idx=0)
-        return LearnedPolicy(params=params, model=model)
+def hub_download(repo: str, revision: str, subdir: str, cache: Path) -> Path:
+    """Fetch a checkpoint folder from the Hugging Face Hub (optional dependency, cached locally)."""
+    from huggingface_hub import snapshot_download
 
-    if clean_ref.startswith("scripted:"):
-        role = clean_ref.split("scripted:")[1].split("?")[0]
-        if role == "crosser":
-            return ScriptedCrosserPolicy()
-        elif role == "guard":
-            return ScriptedGuardPolicy()
-        elif role == "kili":
-            return ScriptedKiliPolicy()
-        else:
-            raise ValueError(f"Unknown scripted role: {role}")
+    root = snapshot_download(repo_id=repo, revision=revision, allow_patterns=[f"{subdir}/*"], cache_dir=str(cache))
+    return Path(root) / subdir
 
-    # Difficulty ladder levels (wrapped with human-fair latencies §7.5)
-    if clean_ref in ("beginner", "easy"):
-        base = ScriptedCrosserPolicy(aggression=0.4, safety_margin=1.2)
-        return HumanFairPolicyWrapper(
-            base, obs_delay_ticks=5, decision_interval_ticks=3, sticky_action_prob=0.10
-        )
-    elif clean_ref in ("medium", "main@medium"):
-        base = ScriptedCrosserPolicy(aggression=0.7, safety_margin=0.8)
-        return HumanFairPolicyWrapper(
-            base, obs_delay_ticks=3, decision_interval_ticks=2, sticky_action_prob=0.05
-        )
-    elif clean_ref in ("hard", "main@hard"):
-        base = ScriptedCrosserPolicy(aggression=0.9, safety_margin=0.5)
-        return HumanFairPolicyWrapper(
-            base, obs_delay_ticks=1, decision_interval_ticks=1, sticky_action_prob=0.0
-        )
-    else:
-        # Default fallback to balanced scripted policy
-        return ScriptedCrosserPolicy()
+
+def load_policy(ref: str, side: str, env_params: EnvParams, deterministic: bool = False, ladder: dict | None = None,
+                runs_dir: str | Path = "runs"):
+    """Return a Policy for ``side`` ("attack" | "defence")."""
+    if ref.startswith("scripted:"):
+        name, _, q = ref[len("scripted:"):].partition("?")
+        kw = {k: float(v[0]) for k, v in parse_qs(q).items()}
+        if side == "attack":
+            return ScriptedAttack(env_params, **{k: v for k, v in kw.items() if k in ("aggression", "safety")})
+        return ScriptedDefence(env_params, **{k: v for k, v in kw.items() if k in ("reaction", "anticipation")})
+    if ref.startswith("run:"):
+        run, _, step = ref[4:].partition("/step:")
+        path = Path(runs_dir) / run / f"{side}" / (f"step-{step}" if step else "latest")
+        params, cfg, _ = load_checkpoint(path, env_params)
+        return NetworkPolicy(side, env_params, cfg, params, deterministic)
+    if ref.startswith("path:"):
+        params, cfg, _ = load_checkpoint(ref[5:], env_params)
+        return NetworkPolicy(side, env_params, cfg, params, deterministic)
+    name, _, level = ref.partition("@")
+    ladder = ladder or load_ladder()
+    entry = ladder["levels"][level or "medium"][name][side]
+    if "scripted" in entry:
+        return load_policy(entry["scripted"], side, env_params, deterministic)
+    path = Path(entry["path"]) if "path" in entry else hub_download(ladder["hub_repo"], entry["revision"], entry["subdir"], Path.home() / ".cache" / "kilithattu")
+    params, cfg, _ = load_checkpoint(path, env_params)
+    return NetworkPolicy(side, env_params, cfg, params, deterministic)

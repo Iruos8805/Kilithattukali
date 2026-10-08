@@ -1,78 +1,64 @@
-"""Snapshot pool for self-play league training."""
-
+"""League pool: frozen snapshots per side, a payoff table, persistence."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-from kilithattu_agents.policy import Policy
+import numpy as np
+
+from kilithattu_agents import save_checkpoint
+from kilithattu_core import EnvParams
+from kilithattu_agents.networks import NetConfig
 
 
 @dataclass
-class SnapshotEntry:
+class Snapshot:
     id: str
-    policy: Policy
-    side: str  # "attack" | "defence"
+    side: str  # attack | defence
+    kind: str  # main | main_exploiter | league_exploiter | past
     step: int
-    metadata: dict[str, Any] = field(default_factory=dict)
-    wins: dict[str, int] = field(default_factory=dict)  # opponent_id -> win count
-    matches: dict[str, int] = field(default_factory=dict)  # opponent_id -> match count
+    params: Any  # {"actor", "critic"}
 
 
-class SnapshotPool:
-    """Stores frozen policy snapshots and empirical head-to-head win records."""
+@dataclass
+class LeaguePool:
+    snaps: dict[str, Snapshot] = field(default_factory=dict)
+    payoff: dict[tuple[str, str], float] = field(default_factory=dict)  # (attack id, defence id) -> EMA of attack win rate
+    points: dict[tuple[str, str], float] = field(default_factory=dict)  # EMA of mean attack points
+    ema: float = 0.5
 
-    def __init__(self) -> None:
-        self.entries: dict[str, SnapshotEntry] = {}
+    def add(self, snap: Snapshot) -> None:
+        self.snaps[snap.id] = snap
 
-    def add_snapshot(
-        self,
-        snapshot_id: str,
-        policy: Policy,
-        side: str,
-        step: int,
-        metadata: dict[str, Any] | None = None,
-    ) -> SnapshotEntry:
-        if side not in ("attack", "defence"):
-            raise ValueError(f"side must be 'attack' or 'defence', got '{side}'")
-        entry = SnapshotEntry(
-            id=snapshot_id,
-            policy=policy,
-            side=side,
-            step=step,
-            metadata=metadata or {},
-        )
-        self.entries[snapshot_id] = entry
-        return entry
+    def side(self, side: str) -> list[Snapshot]:
+        return [s for s in self.snaps.values() if s.side == side]
 
-    def get(self, snapshot_id: str) -> SnapshotEntry:
-        return self.entries[snapshot_id]
+    def record(self, att_id: str, def_id: str, win_rate: float, points: float) -> None:
+        k = (att_id, def_id)
+        self.payoff[k] = win_rate if k not in self.payoff else (1 - self.ema) * self.payoff[k] + self.ema * win_rate
+        self.points[k] = points if k not in self.points else (1 - self.ema) * self.points[k] + self.ema * points
 
-    def list_ids(self, side: str | None = None) -> list[str]:
-        if side is None:
-            return list(self.entries.keys())
-        return [eid for eid, e in self.entries.items() if e.side == side]
+    def attack_win(self, att_id: str, def_id: str, default: float = 0.5) -> float:
+        return self.payoff.get((att_id, def_id), default)
 
-    def record_result(self, id_a: str, id_b: str, a_won: bool) -> None:
-        """Record an outcome between id_a and id_b."""
-        if id_a in self.entries:
-            entry_a = self.entries[id_a]
-            entry_a.matches[id_b] = entry_a.matches.get(id_b, 0) + 1
-            if a_won:
-                entry_a.wins[id_b] = entry_a.wins.get(id_b, 0) + 1
+    def matrix(self):
+        att = [s.id for s in self.side("attack")]
+        dfn = [s.id for s in self.side("defence")]
+        m = np.full((len(att), len(dfn)), np.nan)
+        for i, a in enumerate(att):
+            for j, d in enumerate(dfn):
+                if (a, d) in self.payoff:
+                    m[i, j] = self.payoff[(a, d)]
+        return att, dfn, m
 
-        if id_b in self.entries:
-            entry_b = self.entries[id_b]
-            entry_b.matches[id_a] = entry_b.matches.get(id_a, 0) + 1
-            if not a_won:
-                entry_b.wins[id_a] = entry_b.wins.get(id_a, 0) + 1
-
-    def get_win_rate(self, id_a: str, id_b: str) -> float:
-        """Return empirical win rate of id_a vs id_b with Laplace smoothing (default 0.5)."""
-        if id_a not in self.entries:
-            return 0.5
-        entry = self.entries[id_a]
-        matches = entry.matches.get(id_b, 0)
-        wins = entry.wins.get(id_b, 0)
-        # Laplace smoothing: (wins + 1) / (matches + 2)
-        return (wins + 1.0) / (matches + 2.0)
+    def save(self, run_dir: Path, env_params: EnvParams, net: NetConfig, run_id: str) -> None:
+        d = run_dir / "league"
+        d.mkdir(parents=True, exist_ok=True)
+        for s in self.snaps.values():
+            if not (d / s.id).exists():
+                save_checkpoint(d / s.id, s.params["actor"], env_params, net, s.side, run_id, s.step, extra={"kind": s.kind}, critic_params=s.params["critic"])
+        meta = {"snapshots": [{"id": s.id, "side": s.side, "kind": s.kind, "step": s.step} for s in self.snaps.values()],
+                "payoff": [[a, d_, v] for (a, d_), v in self.payoff.items()], "points": [[a, d_, v] for (a, d_), v in self.points.items()]}
+        (d / "league.json").write_text(json.dumps(meta, indent=2))

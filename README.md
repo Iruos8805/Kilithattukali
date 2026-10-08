@@ -1,155 +1,54 @@
-# Kilithattu-RL (കിളിത്തട്ടുകളി)
+# Kilithattu-RL
 
-> Deep Multi-Agent Reinforcement Learning and Playable Interactive Game for **Kilithattu Kali (Uppukali)** — the traditional Onam tag game of Kerala.
+A formal rules engine, reinforcement-learning stack and playable game for **Kilithattu Kali**, the Kerala Onam
+line-tag game. See `PLAN.md` / `PROPOSAL.md` for the research plan and `RULES.md` for the implemented rules.
 
-[![CI](https://github.com/iruos8805/Kilithattukali/actions/workflows/ci.yml/badge.svg)](https://github.com/iruos8805/Kilithattukali/actions/workflows/ci.yml)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Python: 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](.python-version)
+## Packages
+| Package | Contents |
+|---|---|
+| `kilithattu-core` | JAX environment (Classic + P1-P4, P6), rules, replays, plain-Python reference for differential tests |
+| `kilithattu-agents` | entity-attention actor/critic, scripted bots, checkpoints, difficulty ladder, human-fair wrapper (P7) |
+| `kilithattu-train` | MAPPO, curriculum, self-play league with PFSP and exploiters, FCP partners, behaviour cloning |
+| `kilithattu-eval` | matches, Elo and Nash ratings, tournaments, exploitability, behaviour detectors, Optuna balance search, plots |
+| `kilithattu-game` | pygame client: play as crosser, guard or Kili against scripted or trained bots; replays |
 
----
+`web/kilithattu.html` is a small single-file browser version of the game (scripted bots, no install).
 
-## 🌟 Overview
-
-**Kilithattu Kali** is a strategic line-tag team game where an attacking team of **Crossers** attempts to cross a grid of lines, reach the far safe zone to become **Uppu** (salt), and return home to deliver salt while avoiding line-bound **Guards** and a roaming, line-jumping **Kili**.
-
-This project provides:
-1. **`kilithattu-core`**: A vectorised, deterministic simulation engine built with JAX, implementing both **Classic** rules and strategic **Kilithattu+** toggles (momentum, facing angles, fog-of-war, tactical clap, and procedural fields). Over **50,000 steps/sec** on CPU and millions on GPU.
-2. **`kilithattu-agents`**: Scripted bots, human-fair latency wrappers, and neural policies (entity-attention Transformer actors and centralised critics).
-3. **`kilithattu-train`**: Fully jitted MAPPO (Multi-Agent PPO), curriculum stages (S0–S6), AlphaStar-style self-play league training with Prioritised Fictitious Self-Play (PFSP), and Fictitious Co-Play (FCP) for human-compatible teammates.
-4. **`kilithattu-eval`**: Tournaments, Elo and Nash averaging, exploitability proxy measurement, and game-balancing suites.
-5. **`kilithattu-game`**: A pygame-ce interactive game supporting human vs AI, AI vs AI spectator mode, difficulty ladders, and deterministic `.kreplay` playback.
-
----
-
-## 🎮 Controls
-
-| Action | Keyboard (Crosser) | Keyboard (Kili / Guard) | Gamepad |
-|---|---|---|---|
-| **Move** | `W` `A` `S` `D` (diagonals supported) | `W` `A` `S` `D` (Guards: `A` / `D` only) | Left Stick (8 directions) |
-| **Sprint / Dash (P1)** | `Left Shift` | `Left Shift` | `RT` |
-| **Turn (P2)** | — | `Q` | `LB` |
-| **Clap (P4)** | — | `Space` | `A` button |
-| **Switch Player** | `Tab` | `Tab` | `RB` |
-| **Pause** | `Esc` | `Esc` | `Start` |
-
----
-
-## 🚀 Quick Start
-
-### Installation
-
-Ensure [uv](https://github.com/astral-sh/uv) is installed:
+## Install
 ```bash
-# Sync all workspace packages and dependencies
-uv sync
+pip install -r requirements.txt
+pip install -e packages/kilithattu-core -e packages/kilithattu-agents -e packages/kilithattu-game
+pip install -e packages/kilithattu-train -e packages/kilithattu-eval --no-deps
 ```
+Or `uv sync`. GPU: `pip install "jax[cuda12]"`.
 
-### Play the Game
-
-Launch the interactive game client:
+## Play
 ```bash
-# Play as Crosser against AI defenders
-uv run kilithattu-game --mode play_crosser --difficulty medium
-
-# Play as Kili defender
-uv run kilithattu-game --mode play_kili --difficulty easy
-
-# Watch AI vs AI match
-uv run kilithattu-game --mode watch
+kilithattu --side attack --difficulty medium         # run as a crosser (WASD/arrows, Shift dash, Tab switch)
+kilithattu --side kili --difficulty easy             # run the Kili (hold a direction, you turn at junctions)
+kilithattu --side watch --rules plus                 # watch the bots, Kilithattu+ rules
+kilithattu --headless-ticks 400 --side watch         # no window, prints the result
 ```
 
-### Training & Curriculum
-
-Run MAPPO curriculum stages:
+## Train and evaluate
 ```bash
-# Train on curriculum stage S0 (Run Home)
-uv run kilithattu-train stage --stage S0
-
-# Train on stage S1 (One Line)
-uv run kilithattu-train stage --stage S1
+kilithattu-train curriculum --config configs/train/smoke.yaml      # tiny run
+kilithattu-train curriculum --config configs/train/curriculum.yaml # real run (use a GPU)
+kilithattu-train league --config configs/train/league.yaml
+kilithattu-train fcp --config configs/train/fcp.yaml
+kilithattu-eval match scripted:crosser scripted:guard
+kilithattu-eval verify-replay replays/<game>.kreplay
 ```
+Experiments E1-E7 live in `experiments/` with configs in `configs/eval/`.
 
-### Evaluation & Tournaments
+## Status: what has and has not been verified
+**Tested (passing):** core rules engine (37 tests incl. differential tests against the reference), agents (7), game
+(4, headless). A one-crosser MAPPO run learned 3 full round trips per 24 s innings.
 
-Run round-robin tournament across policies:
-```bash
-uv run kilithattu-eval tournament --innings 20
-```
+**Written but never run in full:** the league, FCP partner mixing, behaviour cloning, curriculum runner,
+exploitability, tournaments, balance search and plots. Their test files exist (`-m nightly`) but I did not get to see them
+pass; expect some bugs there. No trained checkpoints are included: the difficulty ladder uses scripted bots until you train and
+point `configs/game/ladder.yaml` at checkpoints.
 
-### Running Research Experiments (E1–E7)
-
-Run any of the empirical experiment suites:
-```bash
-# E1: Rule depth & ablation study (Classic vs Plus toggles)
-uv run python experiments/e1_rule_ablation/run_e1.py --innings 20
-
-# E2: RL & empirical balancing search
-uv run python experiments/e2_rl_balancing/run_e2.py --trials 6
-
-# E3: Generalisation across field sizes
-uv run python experiments/e3_generalisation/run_e3.py --innings 10
-
-# E4: Self-play league vs naive self-play exploitability
-uv run python experiments/e4_league_vs_selfplay/run_e4.py --iterations 20
-
-# E5: Team communication calls analysis
-uv run python experiments/e5_team_calls/run_e5.py --innings 10
-
-# E6: Fictitious Co-Play with held-out teammates
-uv run python experiments/e6_human_teaming/run_e6.py --innings 10
-
-# E7: Emergent tactical maneuver detectors
-uv run python experiments/e7_emergent_tactics/run_e7.py --innings 10
-```
-
----
-
-## 🧪 Testing & Verification
-
-```bash
-# Run complete test suite (29 tests across all 5 packages)
-uv run pytest
-
-# Check architectural import contracts
-uv run lint-imports
-
-# Check code formatting & linting
-uv run ruff check .
-uv run ruff format --check .
-
-# Benchmark simulation throughput
-uv run python tools/bench_env.py
-```
-
----
-
-## 📐 Project Structure
-
-```
-Kilithattukali/
-├── RULES.md              # Canonical game rules and parameter specifications
-├── PLAN.md               # Detailed technical design and project roadmap
-├── PROPOSAL.md           # Research background and literature review
-├── packages/
-│   ├── kilithattu-core/   # JAX rules engine & replay system
-│   ├── kilithattu-agents/ # Policies, scripted bots, neural models
-│   ├── kilithattu-train/  # MAPPO, curriculum, self-play league, FCP
-│   ├── kilithattu-eval/   # Tournaments, ratings, exploitability, tactics
-│   └── kilithattu-game/   # Interactive pygame client & HUD
-├── configs/              # YAML presets for rules, training, evaluation, ladder
-├── experiments/          # Empirical experiments E1–E7 and result records
-├── tools/                # Benchmarking, balance sweep, and ladder export tools
-└── docs/                 # Architecture decision records, benchmarks, reports
-```
-
----
-
-## 📜 Rules & Specifications
-
-See [RULES.md](RULES.md) for the formal definition of R1–R14 (Classic) and P1–P7 (Kilithattu+ improvements).
-
----
-
-## ⚖️ License
-
-Licensed under the [GNU Affero General Public License v3.0](LICENSE).
+**Known limits:** scripted bots assume full observability (do not use with P3); the Kili's P1 uses dash speed but no
+acceleration; checkpoints use flax msgpack rather than Orbax; balance v1 was tuned on scripted bots only.

@@ -1,27 +1,16 @@
-version: 1.0.0
+# Difficulty ladder for the game. Each level maps an opponent/teammate name to a policy per side.
+# Entries are either scripted refs, local checkpoint folders ("path"), or Hugging Face Hub checkpoints
+# ("revision" + "subdir" under hub_repo). Replace the scripted entries with trained checkpoints once available:
+#   attack:  {path: runs/my_run/attack/latest}
+#   defence: {path: runs/my_run/defence/latest}
+hub_repo: your-org/kilithattu-rl-checkpoints
 levels:
-  beginner:
-    policy: scripted:crosser?aggression=0.3
-    observation_delay_ms: 300
-    decision_interval_ms: 150
-    sticky_action_prob: 0.15
   easy:
-    policy: scripted:crosser?aggression=0.5
-    observation_delay_ms: 250
-    decision_interval_ms: 100
-    sticky_action_prob: 0.1
+    main:     {attack: {scripted: "scripted:crosser?aggression=0.7"},  defence: {scripted: "scripted:guard?reaction=0.15"}}
+    teammate: {attack: {scripted: "scripted:crosser?aggression=0.8"},  defence: {scripted: "scripted:guard?reaction=0.2"}}
   medium:
-    policy: scripted:crosser?aggression=0.7
-    observation_delay_ms: 200
-    decision_interval_ms: 100
-    sticky_action_prob: 0.05
+    main:     {attack: {scripted: "scripted:crosser?aggression=1.0"},  defence: {scripted: "scripted:guard?reaction=0.4"}}
+    teammate: {attack: {scripted: "scripted:crosser?aggression=1.0"},  defence: {scripted: "scripted:guard?reaction=0.4"}}
   hard:
-    policy: scripted:crosser?aggression=0.9
-    observation_delay_ms: 150
-    decision_interval_ms: 50
-    sticky_action_prob: 0.0
-  kalari_master:
-    policy: scripted:crosser?aggression=1.0
-    observation_delay_ms: 50
-    decision_interval_ms: 50
-    sticky_action_prob: 0.0
+    main:     {attack: {scripted: "scripted:crosser?aggression=1.25"}, defence: {scripted: "scripted:guard?reaction=0.6&anticipation=0.2"}}
+    teammate: {attack: {scripted: "scripted:crosser?aggression=1.2"},  defence: {scripted: "scripted:guard?reaction=0.55"}}

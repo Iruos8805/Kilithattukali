@@ -1,74 +1,70 @@
-"""Human-fair wrappers: observation delay ring buffer, sticky actions, and decision intervals."""
+"""P7 human-fair reflexes as an environment wrapper: observation delay, decision interval, sticky actions.
 
+The delay, interval and stickiness are sampled per episode, so one policy can be trained for (and
+evaluated against) a range of reaction speeds. The wrapper has the same API as ``KilithattuEnv``.
+"""
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
 
 import jax
-from chex import PRNGKey
-from kilithattu_core.env import Observations
+import jax.numpy as jnp
+from flax import struct
 
-from kilithattu_agents.policy import Policy, PolicyInfo
+from kilithattu_core import Actions, KilithattuEnv, Obs
 
 
-class HumanFairPolicyWrapper:
-    """Wraps any base policy to introduce human-matched latencies, decision intervals, and noise."""
+@dataclass(frozen=True)
+class HumanFairConfig:
+    max_delay: int = 5  # ticks (5 ticks = 250 ms)
+    delay_range: tuple[int, int] = (0, 5)
+    interval_range: tuple[int, int] = (1, 3)  # decision interval in ticks
+    sticky_range: tuple[float, float] = (0.0, 0.1)
 
-    def __init__(
-        self,
-        base_policy: Policy,
-        obs_delay_ticks: int = 3,  # ~150ms at 20 Hz
-        decision_interval_ticks: int = 2,  # ~100ms
-        sticky_action_prob: float = 0.05,
-    ) -> None:
-        self.base_policy = base_policy
-        self.obs_delay_ticks = obs_delay_ticks
-        self.decision_interval_ticks = decision_interval_ticks
-        self.sticky_action_prob = sticky_action_prob
 
-    def init_carry(self, num_agents: int = 16) -> dict[str, Any]:
-        base_carry = self.base_policy.init_carry(num_agents)
-        return {
-            "base_carry": base_carry,
-            "obs_buffer": [],  # Ring buffer of historical observations
-            "held_actions": {},  # Dict mapping agent_idx to held action
-            "tick_counter": 0,
-        }
+@struct.dataclass
+class HFState:
+    inner: object
+    buf: object  # ring buffer of Obs, leading axis max_delay + 1
+    prev: Actions
+    delay: jax.Array
+    interval: jax.Array
+    sticky: jax.Array
 
-    def act(
-        self,
-        key: PRNGKey,
-        carry: dict[str, Any],
-        obs: Observations,
-        agent_idx: int,
-        mask: Any = None,
-    ) -> tuple[Any, dict[str, Any], PolicyInfo]:
-        buf = carry["obs_buffer"]
-        buf.append(obs)
-        if len(buf) > max(1, self.obs_delay_ticks + 1):
-            buf.pop(0)
 
-        delayed_obs = buf[0]
-        counter = carry["tick_counter"]
-        held = carry["held_actions"].get(agent_idx, None)
+class HumanFairEnv:
+    def __init__(self, env: KilithattuEnv, cfg: HumanFairConfig = HumanFairConfig()):
+        self.env, self.cfg, self.params = env, cfg, env.params
+        self.n_agents, self.n_crossers, self.n_defenders = env.n_agents, env.n_crossers, env.n_defenders
 
+    def reset(self, key):
+        k0, k1, k2, k3 = jax.random.split(key, 4)
+        obs, inner = self.env.reset(k0)
+        c = self.cfg
+        buf = jax.tree_util.tree_map(lambda x: jnp.broadcast_to(x, (c.max_delay + 1,) + x.shape), obs)
+        z = jnp.zeros((self.n_agents,), jnp.int32)
+        st = HFState(inner, buf, Actions(z, z, z, z, z),
+                     jax.random.randint(k1, (), c.delay_range[0], c.delay_range[1] + 1),
+                     jax.random.randint(k2, (), c.interval_range[0], c.interval_range[1] + 1),
+                     jax.random.uniform(k3, (), minval=c.sticky_range[0], maxval=c.sticky_range[1]))
+        return obs, st
+
+    def step(self, key, st: HFState, a: Actions):
         k1, k2 = jax.random.split(key)
-        # Check decision interval
-        needs_decision = (held is None) or (counter % self.decision_interval_ticks == 0)
+        tick = st.inner.tick
+        hold = (tick % st.interval) != 0
+        stick = jax.random.uniform(k1, (self.n_agents,)) < st.sticky
+        use_prev = hold | stick
+        a_eff = jax.tree_util.tree_map(lambda new, old: jnp.where(use_prev, old, new), a, st.prev)
+        obs, inner, r, done, ev = self.env.step(k2, st.inner, a_eff)
+        n = self.cfg.max_delay + 1
+        buf = jax.tree_util.tree_map(lambda b, x: b.at[(tick + 1) % n].set(x), st.buf, obs)
+        delayed = jax.tree_util.tree_map(lambda b: b[(tick + 1 - st.delay) % n], buf)
+        # during the first ticks the delayed slot still holds the reset observation, which is correct
+        return delayed, st.replace(inner=inner, buf=buf, prev=a_eff), r, done, ev
 
-        if needs_decision:
-            action, new_base_carry, info = self.base_policy.act(
-                k1, carry["base_carry"], delayed_obs, agent_idx, mask
-            )
-            # Sticky action check
-            is_sticky = jax.random.uniform(k2) < self.sticky_action_prob
-            if is_sticky and held is not None:
-                action = held
-            carry["held_actions"][agent_idx] = action
-            carry["base_carry"] = new_base_carry
-        else:
-            action = held
-            info = PolicyInfo()
+    def critic_state(self, st: HFState):
+        return self.env.critic_state(st.inner)
 
-        carry["tick_counter"] = counter + 1
-        return action, carry, info
+    def potential(self, st: HFState):
+        return self.env.potential(st.inner)
