@@ -55,3 +55,38 @@ def test_cli_headless_and_window_smoke(capsys):
     main(["--side", "watch", "--headless-ticks", "120", "--rules", "classic"])
     assert "ticks" in capsys.readouterr().out
     main(["--side", "kili", "--difficulty", "easy", "--max-frames", "20"])    # opens a dummy-driver window
+
+
+def test_menu_discovers_models_and_navigates(tmp_path):
+    import json
+
+    import pygame
+
+    from kilithattu_core import ENV_VERSION
+    from kilithattu_game.menu import discover_models, run_menu
+
+    for run, side, name, ver in (("myrun", "attack", "latest", ENV_VERSION), ("myrun", "defence", "best", ENV_VERSION), ("oldrun", "attack", "latest", "1.0.0"), ("myrun", "attack", "s3_stage", ENV_VERSION)):
+        d = tmp_path / run / side / name
+        d.mkdir(parents=True)
+        (d / "metadata.json").write_text(json.dumps({"side": side, "env_version": ver}))
+    (tmp_path / "flat").mkdir(); (tmp_path / "flat" / "metadata.json").write_text(json.dumps({"side": "defence", "env_version": ENV_VERSION}))
+    found = discover_models(tmp_path)
+    assert all("s3_stage" not in l for l, _ in found["attack"]) and any(l == "flat/imitation" for l, _ in found["defence"])
+    assert [l for l, _ in found["attack"]][0].startswith("myrun/latest") and found["attack"][-1][0].startswith("[old]")
+    assert found["defence"][0][1].startswith("path:")
+
+    pygame.init()
+    screen = pygame.display.set_mode((960, 780))
+    post = lambda k: pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=k))
+    post(pygame.K_RIGHT)                       # role: Crosser -> Guard
+    for _ in range(4):
+        post(pygame.K_DOWN)                    # move to the Start row
+    post(pygame.K_RETURN)
+    choice = run_menu(screen, found)
+    assert choice == {"side": "guard", "attack": "main@medium", "defence": "main@medium", "rules": "classic"}
+    pygame.quit()
+
+
+def test_menu_window_smoke_with_autostart(monkeypatch):
+    monkeypatch.setenv("KILITHATTU_MENU_AUTOSTART", "1")
+    main(["--max-frames", "15", "--runs-dir", "does_not_exist"])        # no --side: goes through the menu path
