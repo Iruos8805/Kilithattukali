@@ -1,0 +1,84 @@
+[train 20] {'a/ent': 1.853, 'ep/points': 5.5, 'ep/trips': 0.0, 'sps': 797.581}
+[train 40] {'a/ent': 1.551, 'ep/points': 7.75, 'ep/trips': 0.0, 'sps': 1436.463}
+[train 60] {'a/ent': 0.909, 'ep/points': 33.0, 'ep/trips': 1.5, 'sps': 1959.638}
+[train 80] {'a/ent': 0.442, 'ep/points': 59.667, 'ep/trips': 3.0, 'sps': 2395.982}
+[train 100] {'a/ent': 0.229, 'ep/points': 64.0, 'ep/trips': 3.0, 'sps': 2765.543}
+[eval 100] {'eval/points': 64.219}
+[train 320] {'a/ent': 1.197, 'ep/points': 1.081, 'ep/trips': 0.0, 'sps': 1357.598}
+[train 340] {'a/ent': 1.282, 'ep/points': 1.139, 'ep/trips': 0.0, 'sps': 2285.34}
+[train 360] {'a/ent': 1.512, 'ep/points': 1.333, 'ep/trips': 0.0, 'sps': 2959.447}
+[train 380] {'a/ent': 1.21, 'ep/points': 1.972, 'ep/trips': 0.0, 'sps': 3471.406}
+[train 400] {'a/ent': 1.281, 'ep/points': 2.211, 'ep/trips': 0.0, 'sps': 3873.493}
+[eval 400] {'eval/points': 2.938}
+[train 420] {'a/ent': 1.461, 'ep/points': 3.167, 'ep/trips': 0.0, 'sps': 7199.329}
+[train 440] {'a/ent': 1.393, 'ep/points': 2.5, 'ep/trips': 0.0, 'sps': 7207.887}
+[train 460] {'a/ent': 1.169, 'ep/points': 2.786, 'ep/trips': 0.0, 'sps': 7210.652}
+[train 480] {'a/ent': 1.302, 'ep/points': 2.36, 'ep/trips': 0.0, 'sps': 7212.294}
+[train 500] {'a/ent': 1.28, 'ep/points': 3.556, 'ep/trips': 0.0, 'sps': 7213.02}
+[eval 500] {'eval/points': 2.344}
+[train 520] {'a/ent': 1.123, 'ep/points': 2.897, 'ep/trips': 0.0, 'sps': 7211.481}
+[train 540] {'a/ent': 0.972, 'ep/points': 2.258, 'ep/trips': 0.0, 'sps': 7220.038}
+[train 560] {'a/ent': 1.023, 'ep/points': 2.29, 'ep/trips': 0.0, 'sps': 7222.419}
+[train 580] {'a/ent': 1.08, 'ep/points': 2.65, 'ep/trips': 0.0, 'sps': 7223.629}
+[train 600] {'a/ent': 0.955, 'ep/points': 4.3, 'ep/trips': 0.0, 'sps': 7217.787}
+[eval 600] {'eval/points': 4.656}
+[train 620] {'a/ent': 0.952, 'ep/points': 4.5, 'ep/trips': 0.0, 'sps': 757.162}
+[train 640] {'a/ent': 1.206, 'ep/points': 5.075, 'ep/trips': 0.0, 'sps': 1335.624}
+[train 660] {'a/ent': 1.872, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 1792.02}
+[train 680] {'a/ent': 1.535, 'ep/points': 5.0, 'ep/trips': 0.0, 'sps': 2161.254}
+[train 700] {'a/ent': 1.84, 'ep/points': 5.5, 'ep/trips': 0.0, 'sps': 2466.166}
+[eval 700] {'eval/points': 5.719}
+[train 720] {'a/ent': 2.017, 'ep/points': 1.5, 'ep/trips': 0.0, 'sps': 5615.637}
+[train 740] {'a/ent': 1.656, 'ep/points': 3.5, 'ep/trips': 0.0, 'sps': 5621.705}
+[train 760] {'a/ent': 1.706, 'ep/points': 4.0, 'ep/trips': 0.0, 'sps': 5623.558}
+[train 780] {'a/ent': 1.185, 'ep/points': 7.667, 'ep/trips': 0.0, 'sps': 5624.619}
+[train 800] {'a/ent': 1.334, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 5625.38}
+[eval 800] {'eval/points': 5.0}
+[train 820] {'a/ent': 1.701, 'ep/points': 3.889, 'ep/trips': 0.0, 'sps': 5602.523}
+[train 840] {'a/ent': 1.547, 'ep/points': 5.909, 'ep/trips': 0.0, 'sps': 5607.585}
+[train 860] {'a/ent': 1.281, 'ep/points': 4.368, 'ep/trips': 0.0, 'sps': 5609.565}
+[train 880] {'a/ent': 1.565, 'ep/points': 4.25, 'ep/trips': 0.0, 'sps': 5610.14}
+[train 900] {'a/ent': 1.632, 'ep/points': 6.875, 'ep/trips': 0.0, 'sps': 5610.731}
+[eval 900] {'eval/points': 5.781}
+[train 920] {'a/ent': 1.095, 'ep/points': 4.692, 'ep/trips': 0.0, 'sps': 5622.005}
+[train 940] {'a/ent': 1.182, 'ep/points': 6.958, 'ep/trips': 0.0, 'sps': 5626.177}
+[train 960] {'a/ent': 1.444, 'ep/points': 2.429, 'ep/trips': 0.0, 'sps': 5621.516}
+[train 980] {'a/ent': 1.813, 'ep/points': 5.333, 'ep/trips': 0.0, 'sps': 5619.043}
+[train 1000] {'a/ent': 1.101, 'ep/points': 7.2, 'ep/trips': 0.0, 'sps': 5617.573}
+[eval 1000] {'eval/points': 7.406}
+[train 1020] {'a/ent': 1.291, 'ep/points': 13.25, 'ep/trips': 0.0, 'sps': 722.049}
+[train 1040] {'a/ent': 1.025, 'ep/points': 11.286, 'ep/trips': 0.0, 'sps': 1227.554}
+[train 1060] {'a/ent': 1.245, 'ep/points': 8.957, 'ep/trips': 0.0, 'sps': 1600.909}
+[train 1080] {'a/ent': 1.098, 'ep/points': 10.214, 'ep/trips': 0.0, 'sps': 1888.049}
+[train 1100] {'a/ent': 1.589, 'ep/points': 10.833, 'ep/trips': 0.0, 'sps': 2115.763}
+[eval 1100] {'eval/points': 11.219}
+[train 1120] {'a/ent': 1.381, 'ep/points': 10.333, 'ep/trips': 0.0, 'sps': 4073.724}
+[train 1140] {'a/ent': 1.475, 'ep/points': 8.385, 'ep/trips': 0.0, 'sps': 4076.608}
+[train 1160] {'a/ent': 1.519, 'ep/points': 7.267, 'ep/trips': 0.0, 'sps': 4077.65}
+[train 1180] {'a/ent': 1.618, 'ep/points': 9.455, 'ep/trips': 0.0, 'sps': 4078.055}
+[train 1200] {'a/ent': 1.459, 'ep/points': 7.688, 'ep/trips': 0.0, 'sps': 4078.395}
+[eval 1200] {'eval/points': 8.75}
+[train 1220] {'a/ent': 1.275, 'ep/points': 9.538, 'ep/trips': 0.0, 'sps': 4078.448}
+[train 1240] {'a/ent': 1.32, 'ep/points': 7.944, 'ep/trips': 0.0, 'sps': 4081.184}
+[train 1260] {'a/ent': 1.783, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 4081.961}
+[train 1280] {'a/ent': 0.821, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 4082.57}
+[train 1300] {'a/ent': 0.709, 'ep/points': 12.25, 'ep/trips': 0.0, 'sps': 4081.951}
+[eval 1300] {'eval/points': 9.594}
+[train 1320] {'a/ent': 1.071, 'ep/points': 8.0, 'ep/trips': 0.0, 'sps': 4079.39}
+[train 1340] {'a/ent': 1.328, 'ep/points': 8.167, 'ep/trips': 0.0, 'sps': 4076.045}
+[train 1360] {'a/ent': 1.289, 'ep/points': 8.182, 'ep/trips': 0.0, 'sps': 4074.206}
+[train 1380] {'a/ent': 1.223, 'ep/points': 9.333, 'ep/trips': 0.0, 'sps': 4073.118}
+[train 1400] {'a/ent': 1.265, 'ep/points': 8.214, 'ep/trips': 0.0, 'sps': 4072.521}
+[eval 1400] {'eval/points': 10.094}
+[train 1420] {'a/ent': 1.179, 'ep/points': 11.333, 'ep/trips': 0.0, 'sps': 4064.783}
+[train 1440] {'a/ent': 1.088, 'ep/points': 10.1, 'ep/trips': 0.0, 'sps': 4067.355}
+[train 1460] {'a/ent': 1.739, 'ep/points': 7.667, 'ep/trips': 0.0, 'sps': 4068.2}
+[train 1480] {'a/ent': 1.258, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 4068.711}
+[train 1500] {'a/ent': 1.185, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 4068.886}
+[eval 1500] {'eval/points': 6.469}
+[train 1520] {'a/ent': 1.314, 'ep/points': 9.7, 'ep/trips': 0.0, 'sps': 4063.369}
+[train 1540] {'a/ent': 1.14, 'ep/points': 3.0, 'ep/trips': 0.0, 'sps': 4066.155}
+[train 1560] {'a/ent': 0.976, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 4067.039}
+[train 1580] {'a/ent': 1.127, 'ep/points': 0.0, 'ep/trips': 0.0, 'sps': 4067.653}
+[train 1600] {'a/ent': 1.029, 'ep/points': 9.667, 'ep/trips': 0.0, 'sps': 4067.858}
+[eval 1600] {'eval/points': 10.438}

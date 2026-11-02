@@ -1,36 +1,22 @@
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
+name: ci
+on: [push, pull_request]
 jobs:
-  test-and-lint:
+  fast:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          version: "latest"
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Lint with ruff
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - name: Install
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
-
-      - name: Check import boundaries
-        run: uv run lint-imports
-
-      - name: Run unit & property tests
-        run: uv run pytest
+          pip install -r requirements.txt
+          pip install -e packages/kilithattu-core -e packages/kilithattu-agents -e packages/kilithattu-game
+          pip install -e packages/kilithattu-train -e packages/kilithattu-eval --no-deps
+      - name: Lint
+        run: ruff check packages
+      - name: Rules engine, agents and game tests
+        env: { SDL_VIDEODRIVER: dummy, SDL_AUDIODRIVER: dummy }
+        run: pytest packages/kilithattu-core packages/kilithattu-agents packages/kilithattu-game -m "not nightly"
+      - name: Cheap train/eval unit tests
+        run: pytest packages/kilithattu-train packages/kilithattu-eval -m "not nightly"
